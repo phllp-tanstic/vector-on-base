@@ -15,12 +15,15 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "node --test",
+    "verify:base": "node packages/integrations/scripts/verify-base.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
+    "@types/node": "^26.4.1",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.0.0"
