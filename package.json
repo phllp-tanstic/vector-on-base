@@ -2,6 +2,7 @@
   "name": "vector-on-base",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Intent execution layer for Coinbase Tokenized Stocks on Base.",
   "workspaces": [
     "apps/*",
@@ -17,7 +18,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "node --test",
-    "verify:base": "node packages/integrations/scripts/verify-base.ts"
+    "verify:base": "node packages/integrations/scripts/verify-base.ts",
+    "verify:portfolio": "node services/api/verify-portfolio.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

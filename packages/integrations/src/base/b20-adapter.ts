@@ -111,6 +111,13 @@ export interface B20OptionalMethodInspection {
   readonly toUIAmount: B20OptionalMethodResult;
 }
 
+export interface B20BalanceRead {
+  readonly asset: B20VectorAsset;
+  readonly economicBalance: B20UIAmount;
+  readonly multiplier: B20Multiplier;
+  readonly rawBalance: B20RawAmount;
+}
+
 interface OptionalRead {
   readonly result?: unknown;
   readonly status: "failure" | "success";
@@ -197,26 +204,32 @@ export class BaseMainnetB20Adapter implements B20ReadAdapter {
     }
   }
 
-  async rawBalanceOf(asset: B20VectorAsset, account: EvmAddress): Promise<B20RawAmount> {
+  async rawBalanceOf(
+    asset: B20VectorAsset,
+    account: EvmAddress,
+    blockNumber?: bigint,
+  ): Promise<B20RawAmount> {
     const registered = this.#resolveAsset(asset);
     const validAccount = this.#resolveAccount(account);
     const value = await this.#client.readContract({
       abi: B20_REQUIRED_READ_ABI,
       address: getAddress(registered.tokenAddress),
       args: [validAccount],
+      ...(blockNumber === undefined ? {} : { blockNumber }),
       functionName: "balanceOf",
     });
 
     return b20RawAmount(value);
   }
 
-  async multiplier(asset: B20VectorAsset): Promise<B20Multiplier> {
+  async multiplier(asset: B20VectorAsset, blockNumber?: bigint): Promise<B20Multiplier> {
     const registered = this.#resolveAsset(asset);
 
     try {
       const value = await this.#client.readContract({
         abi: B20_REQUIRED_READ_ABI,
         address: getAddress(registered.tokenAddress),
+        ...(blockNumber === undefined ? {} : { blockNumber }),
         functionName: "multiplier",
       });
 
@@ -245,6 +258,51 @@ export class BaseMainnetB20Adapter implements B20ReadAdapter {
 
   async fromUIAmount(asset: B20VectorAsset, uiAmount: B20UIAmount): Promise<B20RawAmount> {
     return uiToRawAmount(uiAmount, await this.multiplier(asset));
+  }
+
+  async readBalances(
+    assets: readonly B20VectorAsset[],
+    account: EvmAddress,
+    blockNumber?: bigint,
+  ): Promise<readonly B20BalanceRead[]> {
+    const registeredAssets = assets.map((asset) => this.#resolveAsset(asset));
+    const validAccount = this.#resolveAccount(account);
+    const contracts = registeredAssets.flatMap((asset) => {
+      const address = getAddress(asset.tokenAddress);
+
+      return [
+        {
+          abi: B20_REQUIRED_READ_ABI,
+          address,
+          args: [validAccount],
+          functionName: "balanceOf",
+        },
+        {
+          abi: B20_REQUIRED_READ_ABI,
+          address,
+          functionName: "multiplier",
+        },
+      ] as const;
+    });
+    const reads = await this.#client.multicall({
+      allowFailure: true,
+      ...(blockNumber === undefined ? {} : { blockNumber }),
+      contracts,
+    });
+
+    return Object.freeze(
+      registeredAssets.map((asset, index) => {
+        const rawBalance = b20RawAmount(requiredUint256("balanceOf", reads[index * 2]!));
+        const multiplier = b20Multiplier(requiredUint256("multiplier", reads[index * 2 + 1]!));
+
+        return Object.freeze({
+          asset,
+          economicBalance: rawToUIAmount(rawBalance, multiplier),
+          multiplier,
+          rawBalance,
+        });
+      }),
+    );
   }
 
   async inspectOptionalMethods(

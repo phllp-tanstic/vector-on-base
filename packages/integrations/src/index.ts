@@ -5,3 +5,4 @@ export * from "./base/client.ts";
 export * from "./base/config.ts";
 export * from "./base/erc20.ts";
 export * from "./base/network.ts";
+export * from "./base/portfolio-balances.ts";
