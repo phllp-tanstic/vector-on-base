@@ -4,11 +4,17 @@ import {
   BASE_MAINNET_USDC,
   B20_INTERFACE_IDS,
   basePublicClient,
+  createBaseMainnetB20Adapter,
   readErc20Metadata,
   verifyB20Assets,
   verifyBaseNetwork,
 } from "@vector/integrations";
-import { getAddress } from "viem";
+import { b20Multiplier, b20RawAmount, rawToUIAmount, uiToRawAmount } from "@vector/b20";
+import { getAddress, zeroAddress } from "viem";
+
+function formatOptionalMethod(result: { readonly status: "available" | "unavailable" }): string {
+  return result.status;
+}
 
 async function main(): Promise<void> {
   const network = await verifyBaseNetwork();
@@ -68,6 +74,60 @@ async function main(): Promise<void> {
         `uiMultiplier=${result.uiMultiplier ?? "unavailable"} interfaces=${interfaces}`,
     );
   }
+
+  const nvdac = BASE_MAINNET_TOKENIZED_STOCKS.find((asset) => asset.symbol === "NVDAc");
+
+  if (nvdac === undefined) {
+    throw new Error("NVDAc is not registered.");
+  }
+
+  const adapter = createBaseMainnetB20Adapter();
+  const nvdacVerification = stockResults.find((result) => result.symbol === nvdac.symbol);
+
+  if (nvdacVerification === undefined) {
+    throw new Error("NVDAc did not produce a B20 verification result.");
+  }
+
+  const sampleRawAmount = b20RawAmount(10n ** BigInt(nvdac.decimals));
+  const verifiedMultiplier = b20Multiplier(nvdacVerification.multiplier);
+  const sampleUIAmount = rawToUIAmount(sampleRawAmount, verifiedMultiplier);
+  const optionalMethods = await adapter.inspectOptionalMethods(
+    nvdac,
+    zeroAddress,
+    sampleRawAmount,
+    sampleUIAmount,
+  );
+  const rawBalance = optionalMethods.canonicalRawBalance;
+  const multiplier = optionalMethods.canonicalMultiplier;
+
+  if (multiplier !== verifiedMultiplier) {
+    throw new Error("NVDAc adapter multiplier does not match the B20 verification result.");
+  }
+
+  const uiBalance = rawToUIAmount(rawBalance, multiplier);
+  const sampleRoundTripRawAmount = uiToRawAmount(sampleUIAmount, multiplier);
+
+  console.log("NVDAc B20 raw/economic adapter verification passed");
+  console.log(`NVDAc.adapter.address=${nvdac.tokenAddress}`);
+  console.log(`NVDAc.adapter.account=${zeroAddress} purpose=ABI/read-verification-only`);
+  console.log(`NVDAc.adapter.rawDecimals=${nvdac.decimals}`);
+  console.log(`NVDAc.adapter.rawBalance=${rawBalance}`);
+  console.log(`NVDAc.adapter.multiplier=${multiplier}`);
+  console.log(`NVDAc.adapter.uiBalance=${uiBalance}`);
+  console.log(`NVDAc.adapter.sampleRawAmount=${sampleRawAmount}`);
+  console.log(`NVDAc.adapter.sampleUIAmount=${sampleUIAmount}`);
+  console.log(`NVDAc.adapter.sampleRoundTripRawAmount=${sampleRoundTripRawAmount}`);
+  console.log(
+    "NVDAc.adapter.optionalMethods=" +
+      [
+        `balanceOfUI:${formatOptionalMethod(optionalMethods.balanceOfUI)}`,
+        `scaledBalanceOf:${formatOptionalMethod(optionalMethods.scaledBalanceOf)}`,
+        `toUIAmount:${formatOptionalMethod(optionalMethods.toUIAmount)}`,
+        `toScaledBalance:${formatOptionalMethod(optionalMethods.toScaledBalance)}`,
+        `fromUIAmount:${formatOptionalMethod(optionalMethods.fromUIAmount)}`,
+        `toRawBalance:${formatOptionalMethod(optionalMethods.toRawBalance)}`,
+      ].join(","),
+  );
 }
 
 await main();
