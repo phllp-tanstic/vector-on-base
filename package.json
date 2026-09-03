@@ -1,0 +1,14 @@
+{
+  "name": "vector-on-base",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Intent execution layer for Coinbase Tokenized Stocks on Base.",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  }
+}
