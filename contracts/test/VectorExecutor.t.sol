@@ -60,6 +60,16 @@ contract VectorExecutorTest is Test {
         vm.warp(START_TIME);
     }
 
+    function test_ExecuteSelectorMatchesTypedPlanAbi() public pure {
+        bytes4 expected = bytes4(
+            keccak256(
+                "execute((address,address,address,uint256,uint256,address,address,address,uint256,uint256,uint256,bytes))"
+            )
+        );
+        assertEq(VectorExecutor.execute.selector, expected);
+        assertEq(VectorExecutor.execute.selector, bytes4(0xa79dd7fa));
+    }
+
     function test_ExecutesExactSellAndLeavesNoCurrentTradeFundsOrAllowance() public {
         VectorExecutor.ExecutionIntent memory intent = _intent(100 ether, 125 ether, 120 ether, 1);
 

@@ -10,6 +10,12 @@ V1 selects direct authorization: `ExecutionIntent.owner` must equal `msg.sender`
 EOA today and for later Coinbase Smart Account invocation without requiring a second signature.
 There is no relayer, EIP-712 authorization, or Spend Permission in this slice.
 
+For the Coinbase path, the Smart Account address is fixed as both the CDP
+`evmSmartAccount` and `ExecutionIntent.owner`; neither the backend nor the submission adapter accepts
+a replacement caller. The only authorized batch is an exact USDC approval to `VectorExecutor`
+followed by `VectorExecutor.execute`. The approval is never `MaxUint256`, never names the 0x
+allowance target as spender, and cannot be reordered or extended through the public builder.
+
 Nonces are unordered and owner-scoped: `usedNonce[owner][nonce]`. Execution marks a nonce before
 the first untrusted token or router interaction. EVM revert atomicity rolls that write back when any
 later step fails. Owners may irreversibly cancel an unused nonce with `cancelNonce`.
@@ -81,5 +87,16 @@ command after a fresh checkout.
 ## Intentionally offchain or deferred
 
 Portfolio sizing, reserves, exposure, market triggers, reference prices, quote selection, and
-slippage policy remain offchain. Coinbase Smart Accounts, Spend Permissions, signed/delegated
-execution, deployment, live transaction submission, and real-fund testing are deferred.
+slippage policy remain offchain. The current integration only assembles and validates a Coinbase
+user-controlled Smart Account batch; deployment, live UserOperation submission, real-fund testing,
+Spend Permissions, signed/delegated execution, and developer-controlled server wallets are
+deferred.
+
+CDP user-wallet authentication and signing belong in the browser under the authenticated user's
+session (`@coinbase/cdp-hooks` or its lower-level frontend core). A CDP project identifier is public
+configuration; CDP secret API keys, Wallet Secrets, developer private credentials, and delegated
+signing credentials must never enter a browser bundle. Conversely, the server-oriented
+`@coinbase/cdp-sdk` account model is developer controlled and must not be substituted for the user's
+Smart Account. The adapter accepts only an injected user-operation sender and defaults submission
+to disabled. Paymaster sponsorship is omitted unless the caller deliberately opts in; it is not an
+authorization mechanism.

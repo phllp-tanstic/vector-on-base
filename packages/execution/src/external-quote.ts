@@ -15,6 +15,8 @@ export interface VectorExecutionQuote {
   readonly buyAsset: B20VectorAsset;
   readonly chainId: VectorChainId;
   readonly issues: ZeroXIssues;
+  readonly kind: "firm-execution-quote";
+  readonly minBuyAmount: bigint;
   readonly quoteBlockNumber: bigint;
   readonly quoteTimestamp: string;
   readonly quotedB20EconomicBuyAmount: B20UIAmount;
@@ -26,6 +28,7 @@ export interface VectorExecutionQuote {
   readonly sellAsset: VectorAsset;
   readonly slippageBps: number;
   readonly source: "0x";
+  readonly taker: EvmAddress;
   readonly transaction: VectorQuoteTransaction;
 }
 

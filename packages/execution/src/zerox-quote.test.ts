@@ -87,12 +87,15 @@ describe("normalized 0x execution quote", () => {
     const result = build();
 
     assert.equal(result.source, "0x");
+    assert.equal(result.kind, "firm-execution-quote");
+    assert.equal(result.minBuyAmount, 249_250n);
     assert.equal(result.requestedRawSellAmount, 1_000_000n);
     assert.equal(result.quotedRawSellAmount, 1_000_000n);
     assert.equal(result.quotedRawBuyAmount, 250_000n);
     assert.equal(result.quotedB20EconomicBuyAmount, 500_000n);
     assert.equal(result.slippageBps, 30);
     assert.equal(result.allowanceTarget, ALLOWANCE_TARGET);
+    assert.equal(result.taker, TAKER);
     assert.equal(result.transaction.target, TRANSACTION_TARGET);
     assert.equal(result.quoteTimestamp, CAPTURED_AT.toISOString());
     assert.deepEqual(result.routeSourceNames, ["Base_Uniswap_V3"]);

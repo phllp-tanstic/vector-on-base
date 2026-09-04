@@ -99,6 +99,8 @@ function quote(sellAmount: bigint, buyAmount: bigint): VectorExecutionQuote {
       invalidSourcesPassed: [],
       simulationIncomplete: false,
     },
+    kind: "firm-execution-quote",
+    minBuyAmount: buyAmount,
     quoteBlockNumber: 1n,
     quoteTimestamp: "2027-01-15T08:00:00.000Z",
     quotedB20EconomicBuyAmount: b20UIAmount(buyAmount),
@@ -110,6 +112,7 @@ function quote(sellAmount: bigint, buyAmount: bigint): VectorExecutionQuote {
     sellAsset: BASE_MAINNET_USDC,
     slippageBps: 30,
     source: "0x",
+    taker: OWNER,
     transaction: { data: "0x" as const, target: TRANSACTION_TARGET, value: 0n },
   });
 }

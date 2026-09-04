@@ -81,6 +81,47 @@ therefore authorize execution by calling the executor itself; there is no duplic
 signature or premature relayer requirement. Signed or delegated submission is intentionally
 deferred.
 
+## V1 Coinbase Smart Account authorization
+
+The authorization pipeline is deliberately linear:
+
+`AI (draft only) → Risk Engine (ACCEPTED) → Execution Plan Builder → two bounded Smart Account
+calls → Coinbase Smart Account user authorization → VectorExecutor execution-time enforcement →
+0x external execution dependency`
+
+`VectorExecutionPlan` is the deterministic bridge from `READY_FOR_AUTHORIZATION` to user review.
+It is neither a 0x quote nor a receipt. The plan binds Base chain ID `8453`, the Smart Account owner,
+deployed executor configuration, registered assets, exact sell and minimum-buy amounts, recipient,
+nonce, deadline, executor-bound 0x taker, approved 0x targets, opaque quote calldata, and native call
+value. Its calls are a closed ordered tuple: first
+`USDC.approve(VectorExecutor, exactSellAmount)` with zero native value, then
+`VectorExecutor.execute(intent)` with `intent.callValue`. There is no public third-call input.
+
+Coinbase identifies Base Mainnet as `"base"`. Current CDP user-wallet documentation confirms that
+multiple `calls[]` entries execute in order, atomically, in one UserOperation. Vector targets the
+user-controlled browser model exposed by `@coinbase/cdp-hooks`, where the authenticated user's
+Smart Account address comes from the current-user object and `useSendUserOperation` performs the
+authorization. The adapter is structural and injectable, so this repository does not install a
+React SDK or create credentials. It defaults submission off and never manages a signing key.
+
+The checked API baseline is `@coinbase/cdp-hooks` `0.0.123` (registry latest on 2026-09-04), but no
+Coinbase dependency is added in this non-UI slice. The equivalent request is
+`sendUserOperation({ evmSmartAccount, network: "base", calls })`; status can be tracked with
+`useWaitForUserOperation({ userOperationHash, evmSmartAccount, network: "base" })`. CDP paymaster
+use is optional and opt-in. Without sponsorship, Base Mainnet requires the Smart Account to hold
+enough ETH for gas.
+
+Official references:
+
+- [CDP Smart Accounts and atomic batch calls](https://docs.cdp.coinbase.com/wallets/using-wallets/smart-accounts)
+- [CDP frontend hooks overview](https://docs.cdp.coinbase.com/sdks/cdp-sdks-v2/frontend/%40coinbase/cdp-hooks/index)
+- [CDP authentication implementation guide](https://docs.cdp.coinbase.com/wallets/authentication/implementation-guide)
+- [CDP TypeScript SDK and server-controlled EVM Smart Accounts](https://github.com/coinbase/cdp-sdk/blob/main/typescript/packages/cdp-sdk/README.md)
+
+V1 authorization is the user's Smart Account authorization itself. There is no separate signed
+ExecutionIntent, Vector relayer signer, delegated signing, or Spend Permission. A future version may
+add bounded delegated execution through Spend Permissions, but that authority is not present here.
+
 0x calldata remains opaque. A quote must use the executor as its taker and arrange for bought
 tokens to arrive at the executor. The contract cannot independently decode every evolving router
 command, so it constrains calldata with separately administered execution-target and

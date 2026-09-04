@@ -13,6 +13,7 @@
     "@vector/intent": "0.1.0",
     "@vector/portfolio": "0.1.0",
     "@vector/risk": "0.1.0",
-    "@vector/shared": "0.1.0"
+    "@vector/shared": "0.1.0",
+    "viem": "^2.56.3"
   }
 }

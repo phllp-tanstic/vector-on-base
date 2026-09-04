@@ -113,6 +113,8 @@ export function buildZeroXExecutionQuote({
     buyAsset: request.buyAsset,
     chainId: VECTOR_CHAIN_ID,
     issues: quote.issues,
+    kind: "firm-execution-quote",
+    minBuyAmount: quote.minBuyAmount,
     quoteBlockNumber: quote.blockNumber,
     quoteTimestamp: capturedAt.toISOString(),
     quotedB20EconomicBuyAmount: rawToUIAmount(rawBuyAmount, multiplier),
@@ -124,6 +126,7 @@ export function buildZeroXExecutionQuote({
     sellAsset: request.sellAsset,
     slippageBps: request.slippageBps,
     source: "0x",
+    taker: request.taker,
     transaction: Object.freeze({
       data: quote.transaction.data,
       target: quote.transaction.to,
