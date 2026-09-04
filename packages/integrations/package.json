@@ -10,6 +10,7 @@
   "dependencies": {
     "@vector/b20": "0.1.0",
     "@vector/shared": "0.1.0",
-    "viem": "^2.56.3"
+    "viem": "^2.56.3",
+    "zod": "^4.5.4"
   }
 }

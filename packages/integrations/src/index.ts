@@ -6,3 +6,6 @@ export * from "./base/config.ts";
 export * from "./base/erc20.ts";
 export * from "./base/network.ts";
 export * from "./base/portfolio-balances.ts";
+export * from "./zerox/client.ts";
+export * from "./zerox/config.ts";
+export * from "./zerox/types.ts";
