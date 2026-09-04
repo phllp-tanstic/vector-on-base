@@ -23,6 +23,7 @@ coverage/
 contracts/cache/
 contracts/out/
 contracts/broadcast/
+contracts/lib/
 
 # Logs
 *.log

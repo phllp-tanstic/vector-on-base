@@ -17,7 +17,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test",
+    "test": "node --test \"packages/**/*.test.ts\"",
     "verify:base": "node packages/integrations/scripts/verify-base.ts",
     "verify:portfolio": "node services/api/verify-portfolio.ts",
     "verify:risk": "node services/api/verify-risk.ts",

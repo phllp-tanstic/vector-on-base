@@ -11,6 +11,7 @@ export default defineConfig([
       "**/dist/**",
       "**/coverage/**",
       "contracts/cache/**",
+      "contracts/lib/**",
       "contracts/out/**",
       "contracts/broadcast/**",
     ],

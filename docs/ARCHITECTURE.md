@@ -62,3 +62,28 @@ When configured and both asset reference values are available, quote/reference d
 `floor(abs(quotedSellReferenceValue - proposedBuyReferenceValue) × 10000 /
 proposedBuyReferenceValue)`. This compares the quote's effective reference value with the buy
 asset's reference valuation; it is not realized slippage.
+
+## Onchain execution boundary
+
+The V1 trust boundary is:
+
+`AI (no contract authority) → deterministic offchain risk engine → user or Smart Account
+authorization → VectorExecutor → allowlisted external router`
+
+Reserve, exposure, triggers, reference prices, portfolio sizing, quote selection, and slippage
+policy remain offchain. `VectorExecutor` is deliberately not another portfolio or risk engine. It
+enforces only execution-time invariants: direct owner authorization, asset/target/spender
+allowlists, nonce replay protection, an inclusive deadline, exact bounded sell-token allowance,
+actual sell and buy balance deltas, minimum recipient output, and unused-input refunds.
+
+V1 uses direct caller authorization: `intent.owner == msg.sender`. A Coinbase Smart Account can
+therefore authorize execution by calling the executor itself; there is no duplicate EIP-712
+signature or premature relayer requirement. Signed or delegated submission is intentionally
+deferred.
+
+0x calldata remains opaque. A quote must use the executor as its taker and arrange for bought
+tokens to arrive at the executor. The contract cannot independently decode every evolving router
+command, so it constrains calldata with separately administered execution-target and
+allowance-target allowlists, a temporary exact sell-token allowance, maximum-spend accounting, and
+recipient balance-delta verification. A quote that sends output elsewhere fails the executor's
+minimum-output check and reverts atomically.
