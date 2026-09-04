@@ -12,8 +12,11 @@ import {
 } from "./authorization-fixture.ts";
 import {
   buildVectorExecutionPlan,
+  buildVectorExecutionIntent,
   decodeVectorExecutionIntent,
   ExecutionPlanValidationError,
+  hashVectorExecutionIntent,
+  VECTOR_EXECUTION_INTENT_VERSION,
   VECTOR_EXECUTOR_EXECUTE_SELECTOR,
 } from "./execution-plan.ts";
 
@@ -48,6 +51,9 @@ describe("Vector execution authorization plan", () => {
     assert.equal(approval.functionName, "approve");
     assert.deepEqual(approval.args, [AUTHORIZATION_FIXTURE.executor, plan.sellAmount]);
     assert.deepEqual(intent, plan.calls[1].intent);
+    assert.deepEqual(intent, plan.intent);
+    assert.equal(intent.version, VECTOR_EXECUTION_INTENT_VERSION);
+    assert.equal(intent.chainId, 8453);
     assert.equal(intent.owner, AUTHORIZATION_FIXTURE.owner);
     assert.equal(intent.sellToken, BASE_MAINNET_USDC.tokenAddress);
     assert.equal(intent.buyToken, BASE_MAINNET_TOKENIZED_STOCKS[0].tokenAddress);
@@ -56,10 +62,61 @@ describe("Vector execution authorization plan", () => {
     assert.equal(intent.recipient, AUTHORIZATION_FIXTURE.recipient);
     assert.equal(intent.executionTarget, AUTHORIZATION_FIXTURE.executionTarget);
     assert.equal(intent.allowanceTarget, AUTHORIZATION_FIXTURE.allowanceTarget);
-    assert.equal(intent.callValue, 7n);
+    assert.equal(intent.executionValue, 7n);
     assert.equal(intent.deadline, 1_800_000_300n);
     assert.equal(intent.nonce, 42n);
     assert.equal(intent.executionData, "0x12345678");
+  });
+
+  it("preserves explicit deadlines and nonces and hashes different nonces differently", () => {
+    const input = createAuthorizationFixtureInput();
+    const first = buildVectorExecutionIntent({
+      ...input,
+      deadline: input.deadline - 1n,
+      nonce: 7n,
+    });
+    const second = buildVectorExecutionIntent({
+      ...input,
+      deadline: input.deadline - 1n,
+      nonce: 8n,
+    });
+
+    assert.equal(first.deadline, input.deadline - 1n);
+    assert.equal(first.nonce, 7n);
+    assert.equal(second.nonce, 8n);
+    assert.notEqual(
+      hashVectorExecutionIntent(first, AUTHORIZATION_FIXTURE.executor),
+      hashVectorExecutionIntent(second, AUTHORIZATION_FIXTURE.executor),
+    );
+    assert.throws(
+      () => buildVectorExecutionIntent({ ...input, deadline: input.candidate.deadline + 1n }),
+      hasCode("DEADLINE_INVALID"),
+    );
+  });
+
+  it("uses the firm quote raw minimum exactly without applying slippage twice", () => {
+    const input = createAuthorizationFixtureInput();
+    const exactQuote = {
+      ...createAuthorizationFixtureQuote(),
+      minBuyAmount: createAuthorizationFixtureQuote().quotedRawBuyAmount,
+    };
+    const boundaryInput = {
+      ...input,
+      candidate: createAuthorizationFixtureCandidate(exactQuote),
+    };
+
+    assert.equal(buildVectorExecutionIntent(boundaryInput).minBuyAmount, exactQuote.minBuyAmount);
+    assert.throws(
+      () =>
+        buildVectorExecutionIntent({
+          ...input,
+          candidate: createAuthorizationFixtureCandidate({
+            ...exactQuote,
+            minBuyAmount: exactQuote.quotedRawBuyAmount + 1n,
+          }),
+        }),
+      hasCode("QUOTE_INVALID"),
+    );
   });
 
   it("uses the selector asserted independently by the Solidity suite", () => {

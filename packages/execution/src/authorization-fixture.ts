@@ -116,6 +116,7 @@ export function createAuthorizationFixtureInput(): BuildVectorExecutionPlanInput
     assetRegistry: BASE_MAINNET_ASSET_REGISTRY,
     candidate,
     currentTimestamp: AUTHORIZATION_FIXTURE.currentTimestamp,
+    deadline: candidate.deadline,
     nonce: AUTHORIZATION_FIXTURE.nonce,
     recipient: AUTHORIZATION_FIXTURE.recipient,
     riskResult,

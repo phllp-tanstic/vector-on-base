@@ -24,7 +24,7 @@ interface VectorSmartAccountPlanView {
     {
       readonly data: Hex;
       readonly intent: {
-        readonly callValue: bigint;
+        readonly executionValue: bigint;
         readonly owner: EvmAddress;
         readonly sellAmount: bigint;
       };
@@ -110,7 +110,7 @@ export function buildSmartAccountCalls(
     decodedApproval.args[1] !== plan.sellAmount ||
     !sameAddress(execution.to, plan.executor) ||
     execution.value !== plan.executionValue ||
-    execution.intent.callValue !== plan.executionValue ||
+    execution.intent.executionValue !== plan.executionValue ||
     execution.intent.sellAmount !== plan.sellAmount ||
     !execution.data.startsWith(VECTOR_EXECUTOR_EXECUTE_SELECTOR)
   ) {

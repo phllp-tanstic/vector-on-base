@@ -97,6 +97,35 @@ value. Its calls are a closed ordered tuple: first
 `USDC.approve(VectorExecutor, exactSellAmount)` with zero native value, then
 `VectorExecutor.execute(intent)` with `intent.callValue`. There is no public third-call input.
 
+The canonical offchain `VectorExecutionIntent` contains only execution-critical settlement data:
+`version`, `chainId`, `owner`, token addresses, raw `sellAmount`, raw `minBuyAmount`, `recipient`,
+execution and allowance targets, execution calldata/value, `deadline`, and explicit `nonce`.
+`version = VECTOR_EXECUTION_V1` and `chainId` are domain context used by the contract's execution
+identifier but are not duplicated inside the Solidity tuple. Offchain `executionValue` maps exactly
+to Solidity `ExecutionIntent.callValue`; every other settlement field maps one-for-one.
+
+The builder copies 0x `minBuyAmount` directly from the validated firm quote in raw buy-token units.
+That quote already reflects the requested slippage tolerance, so Vector does not apply slippage a
+second time and never substitutes the B20 UI/economic amount. The supplied execution deadline may
+be shorter than, but never exceed, the accepted candidate deadline. Nonce selection and persistence
+remain outside the pure builder.
+
+`hashVectorExecutionIntent` reproduces
+`keccak256(abi.encode(keccak256("VECTOR_EXECUTION_V1"), chainId, executor, solidityIntent))`.
+The local E2E verifier compares its output with `VectorExecutor.hashExecutionIntent`, encodes the
+call independently with the compiled Foundry artifact, and then executes the existing two-call
+batch through a test-only `LocalAuthorizationHarness` on Anvil. That harness is an atomic call
+dispatcher, not a Coinbase Smart Account.
+
+The complete core path is:
+
+`Human/AI draft → typed candidate → deterministic risk engine → canonical ExecutionIntent → Smart
+Account authorization plan → VectorExecutor → external execution router → settlement`
+
+An `ExecutableThesis` is portable/social intent. An `ExecutionIntent` is a concrete, user-specific,
+nonce-bound settlement instruction. Portfolio, reserve, exposure, reference prices, rationale, and
+social metadata never enter the canonical execution intent.
+
 Coinbase identifies Base Mainnet as `"base"`. Current CDP user-wallet documentation confirms that
 multiple `calls[]` entries execute in order, atomically, in one UserOperation. Vector targets the
 user-controlled browser model exposed by `@coinbase/cdp-hooks`, where the authenticated user's

@@ -100,3 +100,16 @@ signing credentials must never enter a browser bundle. Conversely, the server-or
 Smart Account. The adapter accepts only an injected user-operation sender and defaults submission
 to disabled. Paymaster sponsorship is omitted unless the caller deliberately opts in; it is not an
 authorization mechanism.
+
+## Local end-to-end harness
+
+`npm run verify:e2e` starts a fresh loopback-only Anvil process with chain ID `8453`, the public
+deterministic Anvil test mnemonic, mock tokens, mock router, and a test-only
+`LocalAuthorizationHarness`. The harness atomically dispatches the same approval-then-execute call
+array, but it is not a Coinbase Smart Account and proves no Coinbase behavior. The script terminates
+the Anvil child in a `finally` block and never reads `.env`, connects to Base, uses real assets, or
+submits to 0x/CDP.
+
+The local-only plan mode relaxes the production Base USDC address check solely when trusted config
+explicitly says `LOCAL_AUTHORIZATION_HARNESS`; registered enabled mock assets, owner binding, quote
+binding, target allowlists, amounts, deadline, nonce, and calldata checks remain enforced.

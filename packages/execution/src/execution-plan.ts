@@ -9,9 +9,12 @@ import {
 } from "@vector/shared";
 import {
   decodeFunctionData,
+  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
   isAddress,
+  keccak256,
+  stringToHex,
   zeroAddress,
   type Hex,
 } from "viem";
@@ -22,6 +25,8 @@ const MAX_UINT256 = (1n << 256n) - 1n;
 const BYTE_ALIGNED_HEX_PATTERN = /^0x(?:[0-9a-fA-F]{2})+$/;
 
 export const VECTOR_EXECUTOR_EXECUTE_SELECTOR = "0xa79dd7fa" as const;
+export const VECTOR_EXECUTION_INTENT_VERSION = "VECTOR_EXECUTION_V1" as const;
+export const VECTOR_EXECUTION_DOMAIN = keccak256(stringToHex(VECTOR_EXECUTION_INTENT_VERSION));
 
 /** Minimal checked ABI copied field-for-field from VectorExecutor.ExecutionIntent. */
 export const VECTOR_EXECUTOR_ABI = [
@@ -58,6 +63,24 @@ export const VECTOR_EXECUTOR_ABI = [
 ] as const;
 
 export interface VectorExecutionIntent {
+  readonly allowanceTarget: EvmAddress;
+  readonly buyToken: EvmAddress;
+  readonly chainId: VectorChainId;
+  readonly deadline: bigint;
+  readonly executionData: Hex;
+  readonly executionTarget: EvmAddress;
+  /** Maps to ExecutionIntent.callValue in Solidity. */
+  readonly executionValue: bigint;
+  readonly minBuyAmount: bigint;
+  readonly nonce: bigint;
+  readonly owner: EvmAddress;
+  readonly recipient: EvmAddress;
+  readonly sellAmount: bigint;
+  readonly sellToken: EvmAddress;
+  readonly version: typeof VECTOR_EXECUTION_INTENT_VERSION;
+}
+
+interface SolidityExecutionIntent {
   readonly allowanceTarget: EvmAddress;
   readonly buyToken: EvmAddress;
   readonly callValue: bigint;
@@ -102,6 +125,7 @@ export interface VectorExecutionPlan {
   readonly executionTarget: EvmAddress;
   readonly executionValue: bigint;
   readonly executor: EvmAddress;
+  readonly intent: VectorExecutionIntent;
   readonly minBuyAmount: bigint;
   readonly nonce: bigint;
   readonly owner: EvmAddress;
@@ -115,13 +139,15 @@ export interface VectorExecutionPlan {
 export interface VectorExecutionAuthorizationConfig {
   readonly approvedAllowanceTargets: readonly EvmAddress[];
   readonly approvedExecutionTargets: readonly EvmAddress[];
+  readonly environment?: "BASE_MAINNET" | "LOCAL_AUTHORIZATION_HARNESS";
   readonly executorAddress?: EvmAddress | undefined;
 }
 
-export interface BuildVectorExecutionPlanInput {
+export interface BuildVectorExecutionIntentInput {
   readonly assetRegistry: AssetRegistry;
   readonly candidate: ExecutionCandidate & { readonly executionQuote: VectorExecutionQuote };
   readonly currentTimestamp: bigint;
+  readonly deadline: bigint;
   readonly nonce: bigint;
   readonly recipient: EvmAddress;
   readonly riskResult: RiskValidationResult;
@@ -129,11 +155,14 @@ export interface BuildVectorExecutionPlanInput {
   readonly trustedConfig: VectorExecutionAuthorizationConfig;
 }
 
+export type BuildVectorExecutionPlanInput = BuildVectorExecutionIntentInput;
+
 export type ExecutionPlanValidationErrorCode =
   | "ADDRESS_INVALID"
   | "ALLOWANCE_TARGET_UNAPPROVED"
   | "ASSET_UNSUPPORTED"
   | "CANDIDATE_EXPIRED"
+  | "DEADLINE_INVALID"
   | "EXECUTION_TARGET_UNAPPROVED"
   | "EXECUTOR_MISSING"
   | "INVALID_AMOUNT"
@@ -222,11 +251,27 @@ function isApproved(target: EvmAddress, approvedTargets: readonly EvmAddress[]):
   return approvedTargets.some((approved) => sameAddress(approved, target));
 }
 
+function requireCanonicalIntentContext(intent: VectorExecutionIntent): void {
+  if (intent.version !== VECTOR_EXECUTION_INTENT_VERSION) {
+    throw new ExecutionPlanValidationError(
+      "QUOTE_INVALID",
+      "Unsupported execution intent version.",
+    );
+  }
+  if (intent.chainId !== VECTOR_CHAIN_ID) {
+    throw new ExecutionPlanValidationError(
+      "WRONG_CHAIN",
+      "Execution intent must target Base 8453.",
+    );
+  }
+}
+
 export function encodeVectorExecutionIntent(intent: VectorExecutionIntent): Hex {
+  requireCanonicalIntentContext(intent);
   return encodeFunctionData({
     abi: VECTOR_EXECUTOR_ABI,
     functionName: "execute",
-    args: [intent],
+    args: [toSolidityExecutionIntent(intent)],
   });
 }
 
@@ -235,12 +280,69 @@ export function decodeVectorExecutionIntent(data: Hex): VectorExecutionIntent {
   if (decoded.functionName !== "execute") {
     throw new ExecutionPlanValidationError("INVALID_CALLDATA", "Calldata is not execute(...). ");
   }
-  return decoded.args[0] as VectorExecutionIntent;
+  const intent = decoded.args[0] as SolidityExecutionIntent;
+  return Object.freeze({
+    allowanceTarget: intent.allowanceTarget,
+    buyToken: intent.buyToken,
+    chainId: VECTOR_CHAIN_ID,
+    deadline: intent.deadline,
+    executionData: intent.executionData,
+    executionTarget: intent.executionTarget,
+    executionValue: intent.callValue,
+    minBuyAmount: intent.minBuyAmount,
+    nonce: intent.nonce,
+    owner: intent.owner,
+    recipient: intent.recipient,
+    sellAmount: intent.sellAmount,
+    sellToken: intent.sellToken,
+    version: VECTOR_EXECUTION_INTENT_VERSION,
+  });
 }
 
-export function buildVectorExecutionPlan(
-  input: BuildVectorExecutionPlanInput,
-): VectorExecutionPlan {
+function toSolidityExecutionIntent(intent: VectorExecutionIntent): SolidityExecutionIntent {
+  return {
+    allowanceTarget: intent.allowanceTarget,
+    buyToken: intent.buyToken,
+    callValue: intent.executionValue,
+    deadline: intent.deadline,
+    executionData: intent.executionData,
+    executionTarget: intent.executionTarget,
+    minBuyAmount: intent.minBuyAmount,
+    nonce: intent.nonce,
+    owner: intent.owner,
+    recipient: intent.recipient,
+    sellAmount: intent.sellAmount,
+    sellToken: intent.sellToken,
+  };
+}
+
+export function hashVectorExecutionIntent(
+  intent: VectorExecutionIntent,
+  executor: EvmAddress,
+): Hex {
+  requireCanonicalIntentContext(intent);
+  const executorAddress = requireAddress(executor, "VectorExecutor address");
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        VECTOR_EXECUTOR_ABI[0].inputs[0],
+      ],
+      [
+        VECTOR_EXECUTION_DOMAIN,
+        BigInt(intent.chainId),
+        executorAddress,
+        toSolidityExecutionIntent(intent),
+      ],
+    ),
+  );
+}
+
+export function buildVectorExecutionIntent(
+  input: BuildVectorExecutionIntentInput,
+): VectorExecutionIntent {
   const { candidate, riskResult } = input;
   const quote = candidate.executionQuote;
 
@@ -278,7 +380,10 @@ export function buildVectorExecutionPlan(
 
   requireRegisteredEnabledAsset(candidate.sellAsset, input.assetRegistry);
   requireRegisteredEnabledAsset(candidate.buyAsset, input.assetRegistry);
-  if (!sameAddress(candidate.sellAsset.tokenAddress, BASE_MAINNET_USDC.tokenAddress)) {
+  if (
+    input.trustedConfig.environment !== "LOCAL_AUTHORIZATION_HARNESS" &&
+    !sameAddress(candidate.sellAsset.tokenAddress, BASE_MAINNET_USDC.tokenAddress)
+  ) {
     throw new ExecutionPlanValidationError(
       "ASSET_UNSUPPORTED",
       "This authorization slice only supports selling Base Mainnet USDC.",
@@ -304,6 +409,7 @@ export function buildVectorExecutionPlan(
   }
 
   requireUint256(quote.quotedRawSellAmount, "sellAmount", "INVALID_AMOUNT");
+  requireUint256(quote.quotedRawBuyAmount, "quotedRawBuyAmount", "INVALID_AMOUNT");
   requireUint256(quote.minBuyAmount, "minBuyAmount", "INVALID_AMOUNT");
   if (quote.minBuyAmount > quote.quotedRawBuyAmount) {
     throw new ExecutionPlanValidationError(
@@ -313,9 +419,16 @@ export function buildVectorExecutionPlan(
   }
   requireUint256(input.nonce, "nonce", "INVALID_NONCE", true);
   requireUint256(candidate.deadline, "deadline", "CANDIDATE_EXPIRED", true);
+  requireUint256(input.deadline, "deadline", "DEADLINE_INVALID", true);
   requireUint256(input.currentTimestamp, "currentTimestamp", "CANDIDATE_EXPIRED", true);
-  if (input.currentTimestamp > candidate.deadline) {
-    throw new ExecutionPlanValidationError("CANDIDATE_EXPIRED", "Accepted candidate has expired.");
+  if (input.deadline > candidate.deadline) {
+    throw new ExecutionPlanValidationError(
+      "DEADLINE_INVALID",
+      "Execution deadline cannot exceed the accepted candidate deadline.",
+    );
+  }
+  if (input.currentTimestamp > input.deadline) {
+    throw new ExecutionPlanValidationError("CANDIDATE_EXPIRED", "Execution deadline has expired.");
   }
 
   const executionTarget = requireAddress(quote.transaction.target, "executionTarget");
@@ -343,17 +456,32 @@ export function buildVectorExecutionPlan(
   const intent = Object.freeze({
     allowanceTarget,
     buyToken: getAddress(candidate.buyAsset.tokenAddress) as EvmAddress,
-    callValue: quote.transaction.value,
-    deadline: candidate.deadline,
+    chainId: VECTOR_CHAIN_ID,
+    deadline: input.deadline,
     executionData: quote.transaction.data,
     executionTarget,
+    executionValue: quote.transaction.value,
     minBuyAmount: quote.minBuyAmount,
     nonce: input.nonce,
     owner,
     recipient,
     sellAmount: quote.quotedRawSellAmount,
     sellToken: getAddress(candidate.sellAsset.tokenAddress) as EvmAddress,
+    version: VECTOR_EXECUTION_INTENT_VERSION,
   }) satisfies VectorExecutionIntent;
+
+  return intent;
+}
+
+export function buildVectorExecutionPlan(
+  input: BuildVectorExecutionPlanInput,
+): VectorExecutionPlan {
+  const intent = buildVectorExecutionIntent(input);
+  const executor = requireAddress(
+    input.trustedConfig.executorAddress,
+    "VectorExecutor address",
+    "EXECUTOR_MISSING",
+  );
 
   const approvalCall = Object.freeze({
     amount: intent.sellAmount,
@@ -372,28 +500,29 @@ export function buildVectorExecutionPlan(
     intent,
     to: executor,
     type: "VECTOR_EXECUTION",
-    value: intent.callValue,
+    value: intent.executionValue,
   }) satisfies VectorExecutorCall;
   const calls = Object.freeze([approvalCall, executorCall]) as VectorExecutionCalls;
 
   return Object.freeze({
-    allowanceTarget,
+    allowanceTarget: intent.allowanceTarget,
     authorizationMode: "EXPLICIT_SMART_ACCOUNT",
-    buyAsset: candidate.buyAsset,
+    buyAsset: input.candidate.buyAsset,
     calls,
     chainId: VECTOR_CHAIN_ID,
     deadline: intent.deadline,
     executionData: intent.executionData,
-    executionTarget,
-    executionValue: intent.callValue,
+    executionTarget: intent.executionTarget,
+    executionValue: intent.executionValue,
     executor,
+    intent,
     minBuyAmount: intent.minBuyAmount,
     nonce: intent.nonce,
-    owner,
+    owner: intent.owner,
     quoteSource: "0x",
-    recipient,
+    recipient: intent.recipient,
     sellAmount: intent.sellAmount,
-    sellAsset: candidate.sellAsset,
-    smartAccountAddress,
+    sellAsset: input.candidate.sellAsset,
+    smartAccountAddress: intent.owner,
   });
 }
