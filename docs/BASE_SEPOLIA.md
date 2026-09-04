@@ -1,8 +1,9 @@
-# Base Sepolia authorization proof
+# Base Sepolia authorization and execution fixtures
 
-This slice prepares `VectorExecutor` for a manual Base Sepolia deployment and provides a minimal
-browser shell for a user-controlled Coinbase Smart Account. It does not connect the browser to
-Vector execution, 0x, USDC, B20 assets, or Spend Permissions.
+This document covers the existing Base Sepolia `VectorExecutor`, isolated testnet-only execution
+fixtures, and the existing minimal browser authorization proof. The fixture contracts are not real
+USDC, B20 assets, or a production router. They must never be added to
+`BASE_MAINNET_ASSET_REGISTRY` or used by Base Mainnet configuration.
 
 ## Browser setup
 
@@ -35,61 +36,146 @@ Accounts continue to support ordered multi-call batching, although this safety p
 Secrets, developer wallet credentials, deployer private keys, and any backend signing credentials
 must never enter `apps/web`, `.env.local`, or another `NEXT_PUBLIC_*` value.
 
-## Manual VectorExecutor deployment
+## Existing VectorExecutor
 
-The script accepts `VECTOR_OWNER_ADDRESS` as the explicit initial administrator, rejects every
-chain other than Base Sepolia (`84532`), and deploys only `VectorExecutor`. It does not configure
-assets, 0x targets, B20 assets, or allowance targets. The deployer signer comes from Forge's CLI
-keystore selection and is independent of the Vector owner and every user Smart Account.
+The fixture workflow uses the already-deployed executor at
+`0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE`. Do not run
+`DeployVectorExecutor.s.sol` as part of this workflow. Fixture deployment and executor
+configuration are deliberately separate so deploying mocks cannot silently change executor
+permissions.
 
-1. Acquire Base Sepolia ETH for the deployer from an official Base-compatible faucet.
-2. Set the RPC URL and explicit owner/admin address in the current shell:
+All scripts reject chains other than Base Sepolia (`84532`). None reads a private key or broadcasts
+without an explicit CLI `--broadcast` flag. The signer always comes from a Foundry encrypted
+keystore account selected with `--account`.
 
-   ```sh
-   export BASE_SEPOLIA_RPC_URL="https://your-base-sepolia-rpc"
-   export VECTOR_OWNER_ADDRESS="0xYourDistinctOwnerOrMultisig"
-   ```
+## One-time Foundry account setup
 
-3. Import the deployer into Foundry's encrypted keystore. Enter the private key only into Foundry's
-   interactive prompt, never into this repository:
+Acquire Base Sepolia ETH for the transaction-sending accounts from an official Base-compatible
+faucet. Set the RPC URL in the current shell; RPC URLs can contain credentials and must remain
+server-side:
 
-   ```sh
-   cast wallet import vector-sepolia-deployer --interactive
-   ```
+```sh
+export BASE_SEPOLIA_RPC_URL="https://your-base-sepolia-rpc"
+```
 
-4. Dry-run against Base Sepolia without `--broadcast`:
+Import the fixture deployer and the current executor owner/admin into Foundry's encrypted keystore.
+If one address fills both roles, one account alias is enough. Enter keys only in Foundry's
+interactive prompt:
 
-   ```sh
-   cd contracts
-   forge script script/DeployVectorExecutor.s.sol:DeployVectorExecutor \
-     --rpc-url "$BASE_SEPOLIA_RPC_URL" \
-     --account vector-sepolia-deployer \
-     -vvvv
-   ```
+```sh
+cast wallet import vector-sepolia-deployer --interactive
+cast wallet import vector-sepolia-owner --interactive
+```
 
-5. Review the simulated chain ID, initial owner, deployed address, and transaction before manually
-   broadcasting:
+Never put a private key in `.env`, `.env.local`, a command-line flag, or a `PRIVATE_KEY` variable.
 
-   ```sh
-   forge script script/DeployVectorExecutor.s.sol:DeployVectorExecutor \
-     --rpc-url "$BASE_SEPOLIA_RPC_URL" \
-     --account vector-sepolia-deployer \
-     --broadcast \
-     -vvvv
-   ```
+## Deploy the Base Sepolia fixtures
 
-   Forge prints the transaction hash and stores the receipt under `contracts/broadcast/`; the script
-   prints the owner and deployed contract address.
+The fixture deployment creates only `MockUSDC`, `MockB20LikeToken`, and
+`MockExecutionRouter`. It seeds the router with 1,000,000 NOTB20 tokens and prints all three
+addresses. The router deterministically exchanges one whole mUSDC for one whole NOTB20 token.
 
-6. Optionally verify using a supported BaseScan/Etherscan verifier after configuring its API key as
-   a shell-only secret. Follow Foundry's current `forge verify-contract` documentation and use the
-   exact compiler settings from `foundry.toml`.
-7. Record the deployed address as `VECTOR_EXECUTOR_ADDRESS_SEPOLIA` in your local environment.
-8. Add the same public address to future app configuration only when Vector execution is connected.
-   This task deliberately does not wire it into the authorization page.
+From the repository root, first simulate without broadcasting:
 
-Keep these four identities separate: the authenticated user's Smart Account, the deployed
-`VectorExecutor`, `VECTOR_OWNER_ADDRESS`, and the Foundry deployer account.
+```sh
+cd contracts
+forge script script/DeployBaseSepoliaFixtures.s.sol:DeployBaseSepoliaFixtures \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer \
+  -vvvv
+```
+
+Review the simulation. Only then manually add `--broadcast`:
+
+```sh
+forge script script/DeployBaseSepoliaFixtures.s.sol:DeployBaseSepoliaFixtures \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer \
+  --broadcast \
+  -vvvv
+```
+
+Copy the printed public addresses into the current shell:
+
+```sh
+export VECTOR_TEST_MOCK_USDC_ADDRESS="0xDeployedMockUSDC"
+export VECTOR_TEST_MOCK_B20_LIKE_TOKEN_ADDRESS="0xDeployedMockB20LikeToken"
+export VECTOR_TEST_MOCK_EXECUTION_ROUTER_ADDRESS="0xDeployedMockExecutionRouter"
+```
+
+## Configure the existing executor
+
+The selected `vector-sepolia-owner` account must be the current owner of
+`0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE`. The script enables the two mock assets and approves
+the mock router as both the execution target and allowance target. Those permissions are strictly
+for this testnet fixture.
+
+Simulate all four owner calls first:
+
+```sh
+forge script script/ConfigureBaseSepoliaFixtures.s.sol:ConfigureBaseSepoliaFixtures \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-owner \
+  -vvvv
+```
+
+Review the executor address, signer, fixture bytecode, and simulated calls. Then broadcast manually:
+
+```sh
+forge script script/ConfigureBaseSepoliaFixtures.s.sol:ConfigureBaseSepoliaFixtures \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-owner \
+  --broadcast \
+  -vvvv
+```
+
+## Mint a small mUSDC test balance
+
+Set the user-controlled Smart Account address. The amount is raw 6-decimal mUSDC units, defaults
+to `10000000` (10 mUSDC), and is capped by the script at `100000000` (100 mUSDC):
+
+```sh
+export VECTOR_TEST_SMART_ACCOUNT="0xUserSmartAccount"
+export VECTOR_TEST_MOCK_USDC_MINT_AMOUNT="10000000"
+```
+
+Simulate the mint first:
+
+```sh
+forge script script/MintBaseSepoliaMockUSDC.s.sol:MintBaseSepoliaMockUSDC \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer \
+  -vvvv
+```
+
+After reviewing the recipient and amount, broadcast manually:
+
+```sh
+forge script script/MintBaseSepoliaMockUSDC.s.sol:MintBaseSepoliaMockUSDC \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer \
+  --broadcast \
+  -vvvv
+```
+
+Keep these identities separate: the authenticated user's Smart Account, the existing
+`VectorExecutor`, its owner/admin, and the Foundry fixture deployer account. The mock token and
+router addresses belong only in the `VECTOR_TEST_*` configuration above.
+
+## Historical VectorExecutor deployment script
+
+`DeployVectorExecutor.s.sol` remains available for explicit standalone deployments. It accepts
+`VECTOR_OWNER_ADDRESS`, rejects non-Base-Sepolia chains, and uses a CLI keystore signer. It is not
+part of the fixture workflow because the executor address above already exists. If a separate
+deployment is intentionally needed, the dry-run shape is:
+
+```sh
+export VECTOR_OWNER_ADDRESS="0xYourDistinctOwnerOrMultisig"
+forge script script/DeployVectorExecutor.s.sol:DeployVectorExecutor \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer \
+  -vvvv
+```
 
 ## Official references
 
