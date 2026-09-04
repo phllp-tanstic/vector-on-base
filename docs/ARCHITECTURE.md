@@ -28,3 +28,37 @@ separately with the verified multiplier and exposes both values distinctly.
 Live tokenized-equity routing may be gated externally by 0x or legal eligibility. Vector must
 surface that outcome as execution unavailable; it must not bypass the restriction or substitute a
 different asset.
+
+## Deterministic execution risk
+
+AI may interpret user intent, but it does not approve execution. The pure risk engine receives a
+valued portfolio snapshot, a portfolio-produced execution reference valuation, an external
+execution quote, explicit user constraints, optional reference-price trigger state, and an integer
+Unix timestamp. It returns machine-readable `ACCEPTED` or `REJECTED` checks and typed rejection
+codes. Acceptance ends at `READY_FOR_AUTHORIZATION`; this layer neither authorizes nor executes.
+
+Checks are emitted in this order: `SCHEMA → ASSET → ACCOUNT → BALANCE → RESERVE → EXPOSURE →
+TRIGGER → DEADLINE → QUOTE → SLIPPAGE → POLICY`. Independent failures accumulate. A check is
+`SKIPPED` when an invalid prerequisite would make its calculation unsafe.
+
+For a reserve denominated in the sell token:
+`postExecutionBalance = currentRawBalance - quotedRawSellAmount`, which must be at least the raw
+minimum reserve. Reserves are never converted across assets.
+
+Exposure uses reference valuation produced by the portfolio boundary only. The deterministic model
+is:
+`postTradeTotal = preTradeTotal - quotedSellReferenceValue + proposedBuyReferenceValue`, then
+`postTradeBuyExposure = currentBuyReferenceExposure + proposedBuyReferenceValue`. The position is
+accepted only when `postTradeBuyExposure <= floor(postTradeTotal × maxExposureBps / 10000)`. This
+models portfolio composition changing without double-counting the purchased asset or retaining the
+spent sell-asset value.
+
+Trigger comparisons use only the buy asset's reference price: `PRICE_BELOW` passes at or below its
+threshold and `PRICE_ABOVE` passes at or above it. Quote slippage passes only when the explicitly
+requested 0x `slippageBps` is at most the user's configured maximum. This is not a claim about
+realized execution slippage, which is unavailable before execution.
+
+When configured and both asset reference values are available, quote/reference deviation is
+`floor(abs(quotedSellReferenceValue - proposedBuyReferenceValue) × 10000 /
+proposedBuyReferenceValue)`. This compares the quote's effective reference value with the buy
+asset's reference valuation; it is not realized slippage.

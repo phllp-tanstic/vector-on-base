@@ -20,6 +20,7 @@
     "test": "node --test",
     "verify:base": "node packages/integrations/scripts/verify-base.ts",
     "verify:portfolio": "node services/api/verify-portfolio.ts",
+    "verify:risk": "node services/api/verify-risk.ts",
     "verify:zerox": "node --env-file-if-exists=.env services/api/verify-zerox-quote.ts"
   },
   "devDependencies": {
