@@ -101,6 +101,13 @@ Smart Account. The adapter accepts only an injected user-operation sender and de
 to disabled. Paymaster sponsorship is omitted unless the caller deliberately opts in; it is not an
 authorization mechanism.
 
+The Base Sepolia browser proof may contain only the public CDP project identifier, authenticated
+end-user session state, the user's Smart Account address, and public network/contract addresses.
+It must never contain a CDP API secret, Wallet Secret, developer-wallet secret, deployer private
+key, or Vector backend signing key. There is no Vector backend signing key in V1. The user must
+click **Test Authorization** before the browser requests a harmless UserOperation; page load never
+submits one, and the proof is not wired to `VectorExecutionPlan` or `VectorExecutor.execute`.
+
 ## Local end-to-end harness
 
 `npm run verify:e2e` starts a fresh loopback-only Anvil process with chain ID `8453`, the public

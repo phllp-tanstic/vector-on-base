@@ -13,11 +13,11 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm run typecheck --workspace apps/web",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test \"packages/**/*.test.ts\"",
+    "test": "node --test \"packages/**/*.test.ts\" \"apps/**/*.test.ts\"",
     "verify:authorization": "node services/api/verify-authorization.ts",
     "verify:e2e": "node services/api/verify-e2e.ts",
     "verify:base": "node packages/integrations/scripts/verify-base.ts",

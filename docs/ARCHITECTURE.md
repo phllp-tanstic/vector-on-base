@@ -126,19 +126,19 @@ An `ExecutableThesis` is portable/social intent. An `ExecutionIntent` is a concr
 nonce-bound settlement instruction. Portfolio, reserve, exposure, reference prices, rationale, and
 social metadata never enter the canonical execution intent.
 
-Coinbase identifies Base Mainnet as `"base"`. Current CDP user-wallet documentation confirms that
-multiple `calls[]` entries execute in order, atomically, in one UserOperation. Vector targets the
-user-controlled browser model exposed by `@coinbase/cdp-hooks`, where the authenticated user's
-Smart Account address comes from the current-user object and `useSendUserOperation` performs the
-authorization. The adapter is structural and injectable, so this repository does not install a
-React SDK or create credentials. It defaults submission off and never manages a signing key.
+Coinbase identifies Base Mainnet as `"base"` and Base Sepolia as `"base-sepolia"`. Current CDP
+user-wallet documentation confirms that multiple `calls[]` entries can be submitted in one
+UserOperation. Vector targets the user-controlled browser model exposed by `@coinbase/cdp-hooks`,
+where the authenticated user's Smart Account address comes from the current-user account objects
+and `useSendUserOperation` requests authorization. The core integration adapter remains structural,
+injectable, submission-off by default, and unable to manage a signing key.
 
-The checked API baseline is `@coinbase/cdp-hooks` `0.0.123` (registry latest on 2026-09-04), but no
-Coinbase dependency is added in this non-UI slice. The equivalent request is
-`sendUserOperation({ evmSmartAccount, network: "base", calls })`; status can be tracked with
-`useWaitForUserOperation({ userOperationHash, evmSmartAccount, network: "base" })`. CDP paymaster
-use is optional and opt-in. Without sponsorship, Base Mainnet requires the Smart Account to hold
-enough ETH for gas.
+The browser proof in `apps/web` pins `@coinbase/cdp-hooks` and its required `@coinbase/cdp-core` peer
+at `0.0.123` (registry latest on 2026-09-04). It sends only an explicit zero-value Base Sepolia test
+call and tracks its receipt with `useWaitForUserOperation`; it does not import the Vector execution
+plan. CDP currently subsidizes Base Sepolia Smart Account UserOperations, while custom paymaster
+configuration remains omitted. Without sponsorship, Base Mainnet requires the Smart Account to
+hold enough ETH for gas.
 
 Official references:
 

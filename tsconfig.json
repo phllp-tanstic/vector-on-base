@@ -27,5 +27,5 @@
     "packages/**/*.ts",
     "packages/**/*.tsx"
   ],
-  "exclude": ["node_modules", "contracts", "**/dist", "**/.next"]
+  "exclude": ["node_modules", "contracts", "apps/web", "**/dist", "**/.next"]
 }
