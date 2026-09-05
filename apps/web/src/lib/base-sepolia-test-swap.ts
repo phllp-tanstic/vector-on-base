@@ -4,8 +4,8 @@ import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_NETWORK, asEvmAddress } from "./aut
 
 export const BASE_SEPOLIA_TEST_FIXTURES = Object.freeze({
   executor: "0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE" as const,
-  mockUsdc: "0x7d8D51976eB74A7949116732521e48B08d0c92Fd" as const,
-  mockB20LikeToken: "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9" as const,
+  mockUsdc: "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9" as const,
+  mockB20LikeToken: "0x7d8D51976eB74A7949116732521e48B08d0c92Fd" as const,
   router: "0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB" as const,
 });
 

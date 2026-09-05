@@ -33,13 +33,25 @@ describe("Base Sepolia browser test-swap fixture", () => {
   it("pins each fixture role to its authoritative deployed address", () => {
     assert.deepEqual(BASE_SEPOLIA_TEST_FIXTURES, {
       executor: "0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE",
-      mockUsdc: "0x7d8D51976eB74A7949116732521e48B08d0c92Fd",
-      mockB20LikeToken: "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9",
+      mockUsdc: "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9",
+      mockB20LikeToken: "0x7d8D51976eB74A7949116732521e48B08d0c92Fd",
       router: "0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB",
     });
     assert.notEqual(
       BASE_SEPOLIA_TEST_FIXTURES.mockUsdc,
       BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken,
+    );
+  });
+
+  it("matches the deployed router sellToken and buyToken roles", () => {
+    const plan = prepare();
+    assert.equal(
+      plan.intent.sellToken,
+      "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9",
+    );
+    assert.equal(
+      plan.intent.buyToken,
+      "0x7d8D51976eB74A7949116732521e48B08d0c92Fd",
     );
   });
 
