@@ -1,11 +1,12 @@
 "use client";
 
 import { useSendUserOperation, useWaitForUserOperation } from "@coinbase/cdp-hooks";
+import type { EndUserEvmSmartAccount } from "@coinbase/cdp-core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPublicClient, formatUnits, http } from "viem";
 import { baseSepolia } from "viem/chains";
 
-import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_EXPLORER } from "../lib/authorization";
+import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_EXPLORER, asEvmAddress } from "../lib/authorization";
 import {
   BASE_SEPOLIA_PUBLIC_RPC_URL,
   BASE_SEPOLIA_TEST_FIXTURES,
@@ -33,8 +34,9 @@ function formatDeadline(deadline: bigint): string {
 }
 
 export function BaseSepoliaTestSwapCard({
-  smartAccountAddress,
-}: Readonly<{ smartAccountAddress: `0x${string}` | undefined }>) {
+  smartAccount,
+}: Readonly<{ smartAccount: EndUserEvmSmartAccount | undefined }>) {
+  const smartAccountAddress = asEvmAddress(smartAccount?.address);
   const { sendUserOperation, status: sendStatus, error: sendError } = useSendUserOperation();
   const [plan, setPlan] = useState<BaseSepoliaTestSwapPlan>();
   const [balances, setBalances] = useState<TestTokenBalances>();
@@ -69,13 +71,13 @@ export function BaseSepoliaTestSwapCard({
     try {
       const [sell, buy] = await Promise.all([
         publicClient.readContract({
-          address: BASE_SEPOLIA_TEST_FIXTURES.sellToken,
+          address: BASE_SEPOLIA_TEST_FIXTURES.mockUsdc,
           abi: ERC20_TEST_ABI,
           functionName: "balanceOf",
           args: [smartAccountAddress],
         }),
         publicClient.readContract({
-          address: BASE_SEPOLIA_TEST_FIXTURES.buyToken,
+          address: BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken,
           abi: ERC20_TEST_ABI,
           functionName: "balanceOf",
           args: [smartAccountAddress],
@@ -139,6 +141,7 @@ export function BaseSepoliaTestSwapCard({
         nowSeconds,
         balances?.sell,
       ) ||
+      !smartAccount ||
       !smartAccountAddress ||
       hasSubmittedPlan
     ) {
@@ -150,7 +153,7 @@ export function BaseSepoliaTestSwapCard({
     setHasSubmittedPlan(true);
     submissionLock.current = true;
     try {
-      const request = buildBaseSepoliaTestSwapRequest(true, smartAccountAddress, plan);
+      const request = buildBaseSepoliaTestSwapRequest(true, smartAccount, plan);
       if (!request) return;
       const submission = await sendUserOperation(request);
       setUserOperationHash(submission.userOperationHash);
@@ -224,9 +227,9 @@ export function BaseSepoliaTestSwapCard({
             <dt>VectorExecutor</dt>
             <dd>{BASE_SEPOLIA_TEST_FIXTURES.executor}</dd>
             <dt>mUSDC</dt>
-            <dd>{BASE_SEPOLIA_TEST_FIXTURES.sellToken}</dd>
+            <dd>{BASE_SEPOLIA_TEST_FIXTURES.mockUsdc}</dd>
             <dt>NOTB20</dt>
-            <dd>{BASE_SEPOLIA_TEST_FIXTURES.buyToken}</dd>
+            <dd>{BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken}</dd>
             <dt>Execution / allowance target</dt>
             <dd>{BASE_SEPOLIA_TEST_FIXTURES.router}</dd>
             <dt>Native call value</dt>

@@ -42,6 +42,8 @@ describe("browser authorization logic", () => {
 
   it("accepts only a complete EVM address for account operations", () => {
     assert.equal(asEvmAddress(SMART_ACCOUNT), SMART_ACCOUNT);
+    const coinbaseAddress = "0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE";
+    assert.equal(asEvmAddress(coinbaseAddress), coinbaseAddress);
     assert.equal(asEvmAddress("0x1234"), undefined);
   });
 

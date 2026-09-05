@@ -1,11 +1,11 @@
-import { decodeFunctionData, encodeFunctionData, getAddress, type Hex } from "viem";
+import { decodeFunctionData, encodeFunctionData, type Hex } from "viem";
 
-import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_NETWORK } from "./authorization.ts";
+import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_NETWORK, asEvmAddress } from "./authorization.ts";
 
 export const BASE_SEPOLIA_TEST_FIXTURES = Object.freeze({
   executor: "0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE" as const,
-  sellToken: "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9" as const,
-  buyToken: "0x7d8D51976eB74A7949116732521e48B08d0c92Fd" as const,
+  mockUsdc: "0x7d8D51976eB74A7949116732521e48B08d0c92Fd" as const,
+  mockB20LikeToken: "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9" as const,
   router: "0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB" as const,
 });
 
@@ -136,7 +136,7 @@ export function prepareBaseSepoliaTestSwap(
   const nonce = (options.createNonce ?? randomUint128)();
   if (nonce < 0n || nonce >= 1n << 256n) throw new Error("Test swap nonce must be uint256.");
   const deadline = preparedAt + TEST_SWAP_DEADLINE_SECONDS;
-  const owner = getAddress(options.smartAccountAddress.toLowerCase());
+  const owner = options.smartAccountAddress;
   const executionData = encodeFunctionData({
     abi: BASE_SEPOLIA_TEST_ROUTER_ABI,
     functionName: "executeSwap",
@@ -148,8 +148,8 @@ export function prepareBaseSepoliaTestSwap(
   });
   const intent = Object.freeze({
     owner,
-    sellToken: BASE_SEPOLIA_TEST_FIXTURES.sellToken,
-    buyToken: BASE_SEPOLIA_TEST_FIXTURES.buyToken,
+    sellToken: BASE_SEPOLIA_TEST_FIXTURES.mockUsdc,
+    buyToken: BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken,
     sellAmount: TEST_SWAP_SELL_AMOUNT,
     minBuyAmount: TEST_SWAP_MIN_BUY_AMOUNT,
     recipient: owner,
@@ -163,7 +163,7 @@ export function prepareBaseSepoliaTestSwap(
 
   const calls = [
     Object.freeze({
-      to: BASE_SEPOLIA_TEST_FIXTURES.sellToken,
+      to: BASE_SEPOLIA_TEST_FIXTURES.mockUsdc,
       value: 0n,
       data: encodeFunctionData({
         abi: ERC20_TEST_ABI,
@@ -193,10 +193,12 @@ export function prepareBaseSepoliaTestSwap(
 
 export function buildBaseSepoliaTestSwapRequest(
   explicitUserAction: boolean,
-  smartAccountAddress: `0x${string}`,
+  smartAccount: Readonly<{ address: string }>,
   plan: BaseSepoliaTestSwapPlan,
 ) {
   if (!explicitUserAction) return null;
+  const smartAccountAddress = asEvmAddress(smartAccount.address);
+  if (!smartAccountAddress) throw new Error("Coinbase returned an invalid Smart Account address.");
   if (plan.chainId !== BASE_SEPOLIA_CHAIN_ID || plan.network !== BASE_SEPOLIA_NETWORK) {
     throw new Error("Test swap request must use Base Sepolia.");
   }

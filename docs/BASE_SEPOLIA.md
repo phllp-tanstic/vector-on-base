@@ -75,8 +75,8 @@ execution changes the funded account from `10 mUSDC` to `9 mUSDC` and from `0 NO
 These addresses are compiled into the Base Sepolia-only browser fixture module:
 
 - VectorExecutor: `0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE`
-- mUSDC: `0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9`
-- NOTB20: `0x7d8D51976eB74A7949116732521e48B08d0c92Fd`
+- mUSDC: `0x7d8D51976eB74A7949116732521e48B08d0c92Fd`
+- NOTB20: `0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9`
 - MockExecutionRouter: `0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB`
 
 They are testnet fixtures, not production assets. They are deliberately absent from

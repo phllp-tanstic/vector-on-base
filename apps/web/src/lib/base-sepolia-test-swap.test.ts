@@ -15,8 +15,7 @@ import {
   testSwapErrorMessage,
 } from "./base-sepolia-test-swap.ts";
 
-const SMART_ACCOUNT = "0x3fd51CBaEe627Ba30B0B45EC3A522885C3c956BF" as const;
-const CHECKSUMMED_SMART_ACCOUNT = getAddress(SMART_ACCOUNT.toLowerCase());
+const SMART_ACCOUNT = "0x3fd51cbaee627ba30b0b45ec3a522885c3c956bf" as const;
 
 function prepare(nowSeconds = 2_000_000_000n, nonce = 42n) {
   const plan = prepareBaseSepoliaTestSwap({
@@ -31,6 +30,19 @@ function prepare(nowSeconds = 2_000_000_000n, nonce = 42n) {
 }
 
 describe("Base Sepolia browser test-swap fixture", () => {
+  it("pins each fixture role to its authoritative deployed address", () => {
+    assert.deepEqual(BASE_SEPOLIA_TEST_FIXTURES, {
+      executor: "0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE",
+      mockUsdc: "0x7d8D51976eB74A7949116732521e48B08d0c92Fd",
+      mockB20LikeToken: "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9",
+      router: "0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB",
+    });
+    assert.notEqual(
+      BASE_SEPOLIA_TEST_FIXTURES.mockUsdc,
+      BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken,
+    );
+  });
+
   it("constructs nothing until an explicit prepare action", () => {
     assert.equal(
       prepareBaseSepoliaTestSwap({
@@ -68,7 +80,7 @@ describe("Base Sepolia browser test-swap fixture", () => {
     assert.equal(plan.calls.length, 2);
     assert.deepEqual(
       plan.calls.map((call) => call.to),
-      [BASE_SEPOLIA_TEST_FIXTURES.sellToken, BASE_SEPOLIA_TEST_FIXTURES.executor],
+      [BASE_SEPOLIA_TEST_FIXTURES.mockUsdc, BASE_SEPOLIA_TEST_FIXTURES.executor],
     );
     assert.deepEqual(
       plan.calls.map((call) => call.value),
@@ -86,14 +98,16 @@ describe("Base Sepolia browser test-swap fixture", () => {
     const plan = prepare(2_000_000_000n, 777n);
     const decoded = decodeTestSwapCalls(plan);
     const intent = decoded.execution.args[0];
+    assert.equal(plan.intent.owner, SMART_ACCOUNT);
+    assert.equal(plan.intent.recipient, SMART_ACCOUNT);
 
     assert.deepEqual(intent, {
-      owner: CHECKSUMMED_SMART_ACCOUNT,
-      sellToken: BASE_SEPOLIA_TEST_FIXTURES.sellToken,
-      buyToken: BASE_SEPOLIA_TEST_FIXTURES.buyToken,
+      owner: getAddress(SMART_ACCOUNT),
+      sellToken: BASE_SEPOLIA_TEST_FIXTURES.mockUsdc,
+      buyToken: BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken,
       sellAmount: TEST_SWAP_SELL_AMOUNT,
       minBuyAmount: TEST_SWAP_MIN_BUY_AMOUNT,
-      recipient: CHECKSUMMED_SMART_ACCOUNT,
+      recipient: getAddress(SMART_ACCOUNT),
       executionTarget: BASE_SEPOLIA_TEST_FIXTURES.router,
       allowanceTarget: BASE_SEPOLIA_TEST_FIXTURES.router,
       callValue: 0n,
@@ -133,12 +147,29 @@ describe("Base Sepolia browser test-swap fixture", () => {
 
   it("constructs the atomic CDP request only from a second explicit action", () => {
     const plan = prepare();
-    assert.equal(buildBaseSepoliaTestSwapRequest(false, SMART_ACCOUNT, plan), null);
-    assert.deepEqual(buildBaseSepoliaTestSwapRequest(true, SMART_ACCOUNT, plan), {
+    const resolvedCoinbaseSmartAccount = {
+      address: SMART_ACCOUNT,
+      ownerAddresses: ["0x0000000000000000000000000000000000000001"],
+      createdAt: "2026-09-05T00:00:00.000Z",
+    };
+    assert.equal(buildBaseSepoliaTestSwapRequest(false, resolvedCoinbaseSmartAccount, plan), null);
+    assert.deepEqual(buildBaseSepoliaTestSwapRequest(true, resolvedCoinbaseSmartAccount, plan), {
       evmSmartAccount: SMART_ACCOUNT,
       network: "base-sepolia",
       calls: [...plan.calls],
     });
+    assert.throws(
+      () =>
+        buildBaseSepoliaTestSwapRequest(
+          true,
+          {
+            ...resolvedCoinbaseSmartAccount,
+            address: "0x1234567890abcdef1234567890abcdef12345678",
+          },
+          plan,
+        ),
+      /owner no longer matches/,
+    );
   });
 
   it("disables submission without an account, while pending, when expired, or underfunded", () => {

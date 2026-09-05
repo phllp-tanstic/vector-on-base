@@ -40,7 +40,8 @@ export function AuthorizationShell() {
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [userOperationHash, setUserOperationHash] = useState<`0x${string}`>();
 
-  const smartAccountAddress = asEvmAddress(evmSmartAccounts?.[0]?.address);
+  const smartAccount = evmSmartAccounts?.[0];
+  const smartAccountAddress = asEvmAddress(smartAccount?.address);
   const receipt = useWaitForUserOperation({
     ...(userOperationHash ? { userOperationHash } : {}),
     ...(smartAccountAddress ? { evmSmartAccount: smartAccountAddress } : {}),
@@ -210,7 +211,7 @@ export function AuthorizationShell() {
         )}
       </div>
 
-      <BaseSepoliaTestSwapCard smartAccountAddress={smartAccountAddress} />
+      <BaseSepoliaTestSwapCard smartAccount={smartAccount} />
     </div>
   );
 }
