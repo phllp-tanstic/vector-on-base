@@ -4,25 +4,19 @@ import {
   useCreateEvmSmartAccount,
   useCurrentUser,
   useEvmSmartAccounts,
-  useSendUserOperation,
   useSignInWithEmail,
   useSignOut,
   useVerifyEmailOTP,
-  useWaitForUserOperation,
 } from "@coinbase/cdp-hooks";
 import { type FormEvent, useState } from "react";
 
 import {
-  BASE_SEPOLIA_EXPLORER,
   BASE_SEPOLIA_LABEL,
-  BASE_SEPOLIA_NETWORK,
   asEvmAddress,
-  buildSafeAuthorizationRequest,
-  canTestAuthorization,
   formatSmartAccountAddress,
   toErrorMessage,
 } from "../lib/authorization";
-import { BaseSepoliaTestSwapCard } from "./base-sepolia-test-swap-card";
+import { ExecutableThesisWorkspace } from "./executable-thesis-workspace";
 
 export function AuthorizationShell() {
   const { currentUser } = useCurrentUser();
@@ -31,23 +25,15 @@ export function AuthorizationShell() {
   const { verifyEmailOTP } = useVerifyEmailOTP();
   const { signOut } = useSignOut();
   const { createEvmSmartAccount } = useCreateEvmSmartAccount();
-  const { sendUserOperation, status: sendStatus, error: sendError } = useSendUserOperation();
 
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [flowId, setFlowId] = useState<string>();
   const [localError, setLocalError] = useState<string>();
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
-  const [userOperationHash, setUserOperationHash] = useState<`0x${string}`>();
 
   const smartAccount = evmSmartAccounts?.[0];
   const smartAccountAddress = asEvmAddress(smartAccount?.address);
-  const receipt = useWaitForUserOperation({
-    ...(userOperationHash ? { userOperationHash } : {}),
-    ...(smartAccountAddress ? { evmSmartAccount: smartAccountAddress } : {}),
-    network: BASE_SEPOLIA_NETWORK,
-    enabled: Boolean(userOperationHash && smartAccountAddress),
-  });
 
   async function startEmailSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,20 +68,6 @@ export function AuthorizationShell() {
       setLocalError(toErrorMessage(error));
     } finally {
       setIsCreatingAccount(false);
-    }
-  }
-
-  async function testAuthorization() {
-    if (!canTestAuthorization(Boolean(currentUser), smartAccountAddress, sendStatus)) return;
-    const request = buildSafeAuthorizationRequest(true, smartAccountAddress);
-    if (!request) return;
-    setLocalError(undefined);
-    setUserOperationHash(undefined);
-    try {
-      const result = await sendUserOperation(request);
-      setUserOperationHash(result.userOperationHash);
-    } catch (error) {
-      setLocalError(toErrorMessage(error));
     }
   }
 
@@ -144,16 +116,18 @@ export function AuthorizationShell() {
 
   return (
     <div className="stack">
-      <div className="card">
-        <h2>Authenticated account</h2>
-        <dl>
-          <dt>User</dt>
-          <dd>{currentUser.userId}</dd>
-          <dt>Smart Account</dt>
-          <dd>{formatSmartAccountAddress(smartAccountAddress)}</dd>
-          <dt>Network</dt>
-          <dd>{BASE_SEPOLIA_LABEL}</dd>
-        </dl>
+      <div className="account-bar">
+        <div>
+          <span>Smart Account</span>
+          <strong>{formatSmartAccountAddress(smartAccountAddress)}</strong>
+        </div>
+        <div>
+          <span>Network</span>
+          <strong>{BASE_SEPOLIA_LABEL}</strong>
+        </div>
+        <button className="text-button" type="button" onClick={() => void signOut()}>
+          Sign out
+        </button>
       </div>
 
       {!smartAccountAddress && (
@@ -169,49 +143,7 @@ export function AuthorizationShell() {
         </div>
       )}
 
-      <div className="card">
-        <h2>Safe authorization test</h2>
-        <p className="muted">
-          This sends one zero-value call to the zero address. It cannot transfer ETH or tokens and
-          does not call VectorExecutor.
-        </p>
-        <div className="actions">
-          <button
-            type="button"
-            onClick={testAuthorization}
-            disabled={!canTestAuthorization(true, smartAccountAddress, sendStatus)}
-          >
-            {sendStatus === "pending" ? "Awaiting authorization…" : "Test Authorization"}
-          </button>
-          <button className="secondary" type="button" onClick={() => void signOut()}>
-            Sign out
-          </button>
-        </div>
-
-        <p className="status">Status: {receipt.status === "idle" ? sendStatus : receipt.status}</p>
-        {userOperationHash && (
-          <p>
-            UserOperation: <code>{userOperationHash}</code>
-          </p>
-        )}
-        {receipt.data?.transactionHash && (
-          <p>
-            Transaction: <code>{receipt.data.transactionHash}</code>{" "}
-            <a
-              href={`${BASE_SEPOLIA_EXPLORER}/tx/${receipt.data.transactionHash}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View on BaseScan
-            </a>
-          </p>
-        )}
-        {(localError || sendError || receipt.error) && (
-          <p className="error">{localError ?? sendError?.message ?? receipt.error?.message}</p>
-        )}
-      </div>
-
-      <BaseSepoliaTestSwapCard smartAccount={smartAccount} />
+      {smartAccount && <ExecutableThesisWorkspace smartAccount={smartAccount} />}
     </div>
   );
 }

@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "Vector Base Sepolia test",
-  description: "Explicit Coinbase Smart Account authorization and fixture swap on Base Sepolia.",
+  title: "Vector — Executable Thesis",
+  description: "Intent execution layer for tokenized markets on Base.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

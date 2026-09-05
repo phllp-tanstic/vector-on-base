@@ -107,6 +107,41 @@ export interface BaseSepoliaTestSwapPlan {
   ];
 }
 
+export interface ConfirmedTestSwapReceipt {
+  readonly confirmedAt: string;
+  readonly receivedRawBuyAmount: bigint;
+  readonly transactionHash: `0x${string}`;
+  readonly userOperationHash: `0x${string}`;
+}
+
+export function buildConfirmedTestSwapReceipt(input: {
+  readonly afterBuyBalance: bigint | undefined;
+  readonly beforeBuyBalance: bigint | undefined;
+  readonly confirmedAt: string | undefined;
+  readonly receiptStatus: string;
+  readonly transactionHash: string | undefined;
+  readonly userOperationHash: `0x${string}` | undefined;
+}): ConfirmedTestSwapReceipt | null {
+  if (
+    input.receiptStatus !== "success" ||
+    !input.transactionHash ||
+    !/^0x[0-9a-fA-F]+$/.test(input.transactionHash) ||
+    !input.userOperationHash ||
+    !input.confirmedAt ||
+    input.beforeBuyBalance === undefined ||
+    input.afterBuyBalance === undefined ||
+    input.afterBuyBalance < input.beforeBuyBalance
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    confirmedAt: input.confirmedAt,
+    receivedRawBuyAmount: input.afterBuyBalance - input.beforeBuyBalance,
+    transactionHash: input.transactionHash as `0x${string}`,
+    userOperationHash: input.userOperationHash,
+  });
+}
+
 function randomUint128(): bigint {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);

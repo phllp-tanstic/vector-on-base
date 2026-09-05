@@ -9,6 +9,7 @@ import {
   TEST_SWAP_MIN_BUY_AMOUNT,
   TEST_SWAP_SELL_AMOUNT,
   buildBaseSepoliaTestSwapRequest,
+  buildConfirmedTestSwapReceipt,
   canSubmitBaseSepoliaTestSwap,
   decodeTestSwapCalls,
   prepareBaseSepoliaTestSwap,
@@ -208,5 +209,23 @@ describe("Base Sepolia browser test-swap fixture", () => {
       testSwapErrorMessage(new Error("simulation reverted")),
       "Test swap simulation or submission failed: simulation reverted",
     );
+  });
+
+  it("builds a receipt only from a confirmed onchain result and balance delta", () => {
+    const input = {
+      afterBuyBalance: 350_000_000n,
+      beforeBuyBalance: 250_000_000n,
+      confirmedAt: "2026-09-05T12:00:00.000Z",
+      receiptStatus: "success",
+      transactionHash: `0x${"1".repeat(64)}` as `0x${string}`,
+      userOperationHash: `0x${"2".repeat(64)}` as `0x${string}`,
+    };
+    assert.equal(buildConfirmedTestSwapReceipt({ ...input, receiptStatus: "pending" }), null);
+    assert.deepEqual(buildConfirmedTestSwapReceipt(input), {
+      confirmedAt: input.confirmedAt,
+      receivedRawBuyAmount: 100_000_000n,
+      transactionHash: input.transactionHash,
+      userOperationHash: input.userOperationHash,
+    });
   });
 });

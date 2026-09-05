@@ -12,12 +12,19 @@ import {
   BASE_SEPOLIA_TEST_FIXTURES,
   TEST_SWAP_SELL_AMOUNT,
   buildBaseSepoliaTestSwapRequest,
+  buildConfirmedTestSwapReceipt,
   canSubmitBaseSepoliaTestSwap,
   ERC20_TEST_ABI,
   prepareBaseSepoliaTestSwap,
   testSwapErrorMessage,
   type BaseSepoliaTestSwapPlan,
 } from "../lib/base-sepolia-test-swap";
+import {
+  DEMO_PORTFOLIO,
+  type ExecutableThesis,
+  type ThesisRiskResult,
+  type ThesisStatus,
+} from "../lib/executable-thesis";
 
 const publicClient = createPublicClient({
   chain: baseSepolia,
@@ -35,7 +42,15 @@ function formatDeadline(deadline: bigint): string {
 
 export function BaseSepoliaTestSwapCard({
   smartAccount,
-}: Readonly<{ smartAccount: EndUserEvmSmartAccount | undefined }>) {
+  thesis,
+  risk,
+  onStatusChange,
+}: Readonly<{
+  smartAccount: EndUserEvmSmartAccount | undefined;
+  thesis: ExecutableThesis;
+  risk: ThesisRiskResult;
+  onStatusChange: (status: ThesisStatus) => void;
+}>) {
   const smartAccountAddress = asEvmAddress(smartAccount?.address);
   const { sendUserOperation, status: sendStatus, error: sendError } = useSendUserOperation();
   const [plan, setPlan] = useState<BaseSepoliaTestSwapPlan>();
@@ -47,6 +62,8 @@ export function BaseSepoliaTestSwapCard({
   const [localError, setLocalError] = useState<string>();
   const [userOperationHash, setUserOperationHash] = useState<`0x${string}`>();
   const [balancesRefreshedFor, setBalancesRefreshedFor] = useState<string>();
+  const [preExecutionBalances, setPreExecutionBalances] = useState<TestTokenBalances>();
+  const [confirmedAt, setConfirmedAt] = useState<string>();
   const [nowSeconds, setNowSeconds] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
   const submissionLock = useRef(false);
 
@@ -110,11 +127,22 @@ export function BaseSepoliaTestSwapCard({
   useEffect(() => {
     const transactionHash = userOperationHash ? receipt.data?.transactionHash : undefined;
     if (receipt.status === "success" && transactionHash) {
+      onStatusChange("EXECUTED");
       void refreshBalances().then((refreshed) => {
-        if (refreshed) setBalancesRefreshedFor(transactionHash);
+        if (refreshed) {
+          setBalancesRefreshedFor(transactionHash);
+          setConfirmedAt(new Date().toISOString());
+        }
       });
     }
-  }, [userOperationHash, receipt.status, receipt.data?.transactionHash, refreshBalances]);
+    if (receipt.status === "error") onStatusChange("FAILED");
+  }, [
+    userOperationHash,
+    receipt.status,
+    receipt.data?.transactionHash,
+    refreshBalances,
+    onStatusChange,
+  ]);
 
   function prepareSwap() {
     if (!smartAccountAddress || isPending) return;
@@ -122,6 +150,7 @@ export function BaseSepoliaTestSwapCard({
     setUserOperationHash(undefined);
     setBalancesRefreshedFor(undefined);
     setHasSubmittedPlan(false);
+    setConfirmedAt(undefined);
     const prepared = prepareBaseSepoliaTestSwap({
       explicitUserAction: true,
       smartAccountAddress,
@@ -151,15 +180,18 @@ export function BaseSepoliaTestSwapCard({
     setUserOperationHash(undefined);
     setIsSubmitting(true);
     setHasSubmittedPlan(true);
+    onStatusChange("AUTHORIZING");
     submissionLock.current = true;
     try {
       const request = buildBaseSepoliaTestSwapRequest(true, smartAccount, plan);
       if (!request) return;
+      setPreExecutionBalances(balances);
       const submission = await sendUserOperation(request);
       setUserOperationHash(submission.userOperationHash);
     } catch (error) {
       setHasSubmittedPlan(false);
       setLocalError(testSwapErrorMessage(error));
+      onStatusChange("FAILED");
     } finally {
       submissionLock.current = false;
       setIsSubmitting(false);
@@ -180,14 +212,27 @@ export function BaseSepoliaTestSwapCard({
   const receiptSucceeded = Boolean(userOperationHash && receipt.status === "success");
   const receiptError = userOperationHash ? receipt.error : undefined;
   const relevantSendError = hasSubmittedPlan ? sendError : undefined;
+  const confirmedReceipt = buildConfirmedTestSwapReceipt({
+    afterBuyBalance: balances?.buy,
+    beforeBuyBalance: preExecutionBalances?.buy,
+    confirmedAt,
+    receiptStatus: receipt.status,
+    transactionHash,
+    userOperationHash,
+  });
 
   return (
-    <div className="card test-swap-card">
-      <p className="eyebrow">Base Sepolia fixture · real token movement</p>
-      <h2>Explicit test swap</h2>
+    <section className="surface test-swap-card">
+      <div className="testnet-banner">
+        <strong>BASE SEPOLIA LIVE DEMO</strong>
+        <span>TEST ASSETS</span>
+        <span>NO REAL STOCKS</span>
+      </div>
+      <p className="eyebrow">Execution preview</p>
+      <h2>You are authorizing</h2>
       <p className="muted">
-        This is separate from Test Authorization. It moves exactly 1 mUSDC through the deployed
-        VectorExecutor and requires two deliberate clicks: prepare, then authorize.
+        The NVDA thesis has passed deterministic risk review. This isolated testnet settlement
+        proves the same authorization boundary with mUSDC → NOTB20.
       </p>
 
       <div className="balance-grid" aria-label="Smart Account fixture token balances">
@@ -210,13 +255,17 @@ export function BaseSepoliaTestSwapCard({
       </button>
       {balanceError && <p className="error">{balanceError}</p>}
 
-      <button type="button" onClick={prepareSwap} disabled={!smartAccountAddress || isPending}>
-        {plan ? "Prepare a fresh test swap" : "Prepare test swap"}
+      <button
+        type="button"
+        onClick={prepareSwap}
+        disabled={!smartAccountAddress || isPending || thesis.status !== "READY_FOR_AUTHORIZATION"}
+      >
+        {plan ? "Prepare a fresh execution" : "Prepare execution"}
       </button>
 
       {plan && (
         <div className="confirmation" aria-label="Test swap confirmation">
-          <h3>Confirm exact instruction</h3>
+          <h3>Exact execution package</h3>
           <dl>
             <dt>Sell</dt>
             <dd>1 mUSDC (1,000,000 base units)</dd>
@@ -234,6 +283,10 @@ export function BaseSepoliaTestSwapCard({
             <dd>{BASE_SEPOLIA_TEST_FIXTURES.router}</dd>
             <dt>Native call value</dt>
             <dd>0</dd>
+            <dt>Network</dt>
+            <dd>Base Sepolia (84532)</dd>
+            <dt>Authorization source</dt>
+            <dd>Coinbase user-controlled Smart Account</dd>
             <dt>Nonce</dt>
             <dd>{plan.intent.nonce.toString()}</dd>
             <dt>Deadline</dt>
@@ -248,8 +301,14 @@ export function BaseSepoliaTestSwapCard({
             </dd>
           </dl>
           <ol className="call-sequence">
-            <li>mUSDC.approve(VectorExecutor, 1,000,000)</li>
             <li>
+              <strong>Call 1 · Exact approval</strong>
+              <br />
+              mUSDC.approve(VectorExecutor, 1,000,000)
+            </li>
+            <li>
+              <strong>Call 2 · Deterministic execution</strong>
+              <br />
               VectorExecutor.execute(intent), which calls router.executeSwap(VectorExecutor,
               VectorExecutor, 1,000,000)
             </li>
@@ -282,13 +341,62 @@ export function BaseSepoliaTestSwapCard({
           </a>
         </p>
       )}
-      {receiptSucceeded && (
-        <p className="success">
-          {transactionHash && balancesRefreshedFor === transactionHash
-            ? "Test swap succeeded. The receipt is confirmed and the displayed balances were refreshed."
-            : "Test swap receipt succeeded. Refreshing the displayed balances…"}
-        </p>
-      )}
+      {receiptSucceeded &&
+        (transactionHash && balancesRefreshedFor === transactionHash && confirmedReceipt ? (
+          <div className="execution-receipt">
+            <div className="receipt-heading">
+              <div>
+                <p className="eyebrow">Execution receipt</p>
+                <h3>Thesis executed</h3>
+              </div>
+              <span className="risk-state passed">EXECUTED</span>
+            </div>
+            <dl>
+              <dt>Executed thesis</dt>
+              <dd>NVDA conditional entry</dd>
+              <dt>Asset</dt>
+              <dd>NVDA intent · NOTB20 test settlement</dd>
+              <dt>Sell amount</dt>
+              <dd>1 mUSDC</dd>
+              <dt>Received amount</dt>
+              <dd>{formatUnits(confirmedReceipt.receivedRawBuyAmount, 8)} NOTB20</dd>
+              <dt>Smart Account</dt>
+              <dd>{smartAccountAddress}</dd>
+              <dt>VectorExecutor</dt>
+              <dd>{BASE_SEPOLIA_TEST_FIXTURES.executor}</dd>
+              <dt>UserOperation hash</dt>
+              <dd>{confirmedReceipt.userOperationHash}</dd>
+              <dt>Transaction hash</dt>
+              <dd>
+                <a
+                  href={`${BASE_SEPOLIA_EXPLORER}/tx/${confirmedReceipt.transactionHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {confirmedReceipt.transactionHash}
+                </a>
+              </dd>
+              <dt>Network</dt>
+              <dd>Base Sepolia (84532)</dd>
+              <dt>Timestamp</dt>
+              <dd>{new Date(confirmedReceipt.confirmedAt).toLocaleString()}</dd>
+            </dl>
+            <div className="why-executed">
+              <strong>Why this executed</strong>
+              <ul>
+                <li>Trigger satisfied at ${DEMO_PORTFOLIO.currentReferencePriceUsd}</li>
+                <li>${thesis.parameters.reserveUsd.toLocaleString()} reserve preserved</li>
+                <li>${risk.executableSizeUsd} position within exposure limit</li>
+                <li>{DEMO_PORTFOLIO.quotedSlippagePercent}% slippage within maximum</li>
+                <li>User explicitly authorized both calls</li>
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <p className="success">
+            Execution confirmed. Refreshing onchain balances for the final receipt…
+          </p>
+        ))}
       {(localError || relevantSendError || receiptError) && (
         <p className="error">
           {localError ??
@@ -296,6 +404,6 @@ export function BaseSepoliaTestSwapCard({
             (receiptError ? testSwapErrorMessage(receiptError) : undefined)}
         </p>
       )}
-    </div>
+    </section>
   );
 }
