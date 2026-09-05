@@ -22,6 +22,7 @@ import {
   formatSmartAccountAddress,
   toErrorMessage,
 } from "../lib/authorization";
+import { BaseSepoliaTestSwapCard } from "./base-sepolia-test-swap-card";
 
 export function AuthorizationShell() {
   const { currentUser } = useCurrentUser();
@@ -208,6 +209,8 @@ export function AuthorizationShell() {
           <p className="error">{localError ?? sendError?.message ?? receipt.error?.message}</p>
         )}
       </div>
+
+      <BaseSepoliaTestSwapCard smartAccountAddress={smartAccountAddress} />
     </div>
   );
 }

@@ -36,6 +36,53 @@ Accounts continue to support ordered multi-call batching, although this safety p
 Secrets, developer wallet credentials, deployer private keys, and any backend signing credentials
 must never enter `apps/web`, `.env.local`, or another `NEXT_PUBLIC_*` value.
 
+## Browser test-swap workflow
+
+The browser also exposes a separate **Explicit test swap** card. Unlike **Test Authorization**, this
+workflow moves fixture tokens. It never constructs a plan on page load and never submits merely
+because a plan exists.
+
+The card reads the authenticated Smart Account's mUSDC and NOTB20 balances from the public
+`https://sepolia.base.org` endpoint. This URL has no credentials and no RPC secret is exposed in a
+`NEXT_PUBLIC_*` variable. After signing in:
+
+1. Confirm that the displayed Smart Account is the intended fixture-funded account and that its
+   mUSDC balance is at least `1`.
+2. Click **Prepare test swap**. This user action creates a cryptographically random nonce and a
+   visible deadline five minutes in the future. It does not contact the wallet or submit anything.
+3. Review the exact amounts, owner/recipient, four contracts, zero native value, nonce, deadline,
+   and ordered two-call sequence shown on screen.
+4. Click the separate **Authorize and execute** button and approve the CDP Smart Account request.
+5. Wait while duplicate submission is disabled. A wallet rejection or simulation/submission error
+   is shown as a failure and never as success.
+6. Success appears only after the UserOperation receipt succeeds. The card then shows the userOp
+   hash, transaction hash, BaseScan link, and refreshed token balances.
+
+The one atomic `base-sepolia` UserOperation contains, in order:
+
+1. mUSDC `approve(VectorExecutor, 1_000_000)`.
+2. `VectorExecutor.execute(ExecutionIntent)` with a sell amount of `1_000_000`, minimum buy amount
+   of `100_000_000`, the Smart Account as both owner and final recipient, the mock router as both
+   execution and allowance target, and `callValue = 0`.
+
+The nested router calldata is exactly
+`executeSwap(VectorExecutor, VectorExecutor, 1_000_000)`. The router therefore returns NOTB20 to
+the executor first. `VectorExecutor` verifies its NOTB20 balance delta before transferring the
+received amount to the Smart Account. With the fixture's 100:1 base-unit rate, the expected first
+execution changes the funded account from `10 mUSDC` to `9 mUSDC` and from `0 NOTB20` to
+`1 NOTB20` (assuming those are its balances immediately before execution).
+
+These addresses are compiled into the Base Sepolia-only browser fixture module:
+
+- VectorExecutor: `0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE`
+- mUSDC: `0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9`
+- NOTB20: `0x7d8D51976eB74A7949116732521e48B08d0c92Fd`
+- MockExecutionRouter: `0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB`
+
+They are testnet fixtures, not production assets. They are deliberately absent from
+`BASE_MAINNET_ASSET_REGISTRY`, and the production execution builder remains restricted to Base
+Mainnet (`8453`).
+
 ## Existing VectorExecutor
 
 The fixture workflow uses the already-deployed executor at

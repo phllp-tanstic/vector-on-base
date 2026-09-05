@@ -28,7 +28,7 @@ main {
 }
 
 .panel {
-  width: min(100%, 680px);
+  width: min(100%, 780px);
   padding: 32px;
   border: 1px solid #d8e0ee;
   border-radius: 18px;
@@ -150,6 +150,74 @@ dd {
   color: #a11919;
 }
 
+.success {
+  color: #116329;
+  font-weight: 700;
+}
+
+.test-swap-card {
+  display: grid;
+  gap: 16px;
+  border-color: #aabff8;
+  background: #f7f9ff;
+}
+
+.test-swap-card h2,
+.test-swap-card h3,
+.test-swap-card p {
+  margin-top: 0;
+}
+
+.balance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.balance-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #d8e0ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.balance-grid span {
+  color: #526079;
+  font-size: 0.82rem;
+}
+
+.balance-grid strong {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+button.compact {
+  justify-self: start;
+}
+
+.confirmation {
+  padding: 16px;
+  border: 1px solid #c9d5ef;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.confirmation h3 {
+  margin-bottom: 12px;
+}
+
+.call-sequence {
+  display: grid;
+  gap: 8px;
+  padding-left: 24px;
+  line-height: 1.45;
+}
+
+.hash-line {
+  overflow-wrap: anywhere;
+}
+
 a {
   color: #1652f0;
 }
@@ -166,5 +234,9 @@ a {
 
   dd {
     margin-bottom: 8px;
+  }
+
+  .balance-grid {
+    grid-template-columns: 1fr;
   }
 }

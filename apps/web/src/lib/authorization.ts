@@ -45,7 +45,9 @@ export function formatSmartAccountAddress(address: string | null | undefined): s
 }
 
 export function asEvmAddress(address: string | null | undefined): `0x${string}` | undefined {
-  return /^0x[0-9a-fA-F]{40}$/.test(address ?? "") ? (address as `0x${string}`) : undefined;
+  return /^0x[0-9a-fA-F]{40}$/.test(address ?? "")
+    ? (address!.toLowerCase() as `0x${string}`)
+    : undefined;
 }
 
 export function canTestAuthorization(

@@ -5,11 +5,11 @@ export default function HomePage() {
   return (
     <main>
       <section className="panel">
-        <p className="eyebrow">Vector · authorization proof</p>
+        <p className="eyebrow">Vector · Base Sepolia</p>
         <h1>User-controlled Smart Account</h1>
         <p className="lede">
-          Sign in and explicitly authorize one harmless, zero-value UserOperation on Base Sepolia.
-          This test is not connected to Vector trading.
+          Sign in to run either the harmless authorization proof or explicitly prepare and approve
+          the isolated VectorExecutor fixture swap.
         </p>
         <CdpProvider>
           <AuthorizationShell />
