@@ -20,9 +20,14 @@ Balance acquisition never fetches prices. B20 multipliers convert raw token amou
 quantities; they are not prices and do not imply USD value. Standard ERC-20 assets such as USDC
 remain on the ordinary raw-token path without a synthetic B20 multiplier.
 
-**REFERENCE PRICE ≠ EXECUTION QUOTE.** A reference price will describe portfolio and trigger state.
+**REFERENCE PRICE ≠ EXECUTION QUOTE.** A reference price describes portfolio and trigger state.
 An **EXECUTION QUOTE** describes currently obtainable onchain liquidity and routing from 0x and
 belongs to a separate execution boundary. It is not a reference-price provider.
+
+The selected production boundary is Chainlink Data Streams V11 with an explicit, versioned
+NVDA/AAPL/GOOGL/META source manifest. Its server adapter preserves feed ID, USD quote currency,
+mid-price timestamp, and market status; see
+[`REFERENCE_PRICE_PROVIDER.md`](./REFERENCE_PRICE_PROVIDER.md).
 
 For 0x execution quotes, `sellAmount` and `buyAmount` are raw token base units. A quoted B20
 `buyAmount` remains the raw amount used by swap calldata; Vector derives its B20 UI/economic amount

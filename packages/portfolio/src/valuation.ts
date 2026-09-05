@@ -60,10 +60,19 @@ export function valuePosition(
 ): ValuedPosition {
   const validatedPrice = createAssetPrice({
     asset: referencePrice.asset,
+    ...(referencePrice.marketStatus === undefined
+      ? {}
+      : { marketStatus: referencePrice.marketStatus }),
     observedAt: referencePrice.observedAt,
     price: referencePrice.price,
     priceDecimals: referencePrice.priceDecimals,
+    ...(referencePrice.quoteCurrency === undefined
+      ? {}
+      : { quoteCurrency: referencePrice.quoteCurrency }),
     source: referencePrice.source,
+    ...(referencePrice.sourceIdentifier === undefined
+      ? {}
+      : { sourceIdentifier: referencePrice.sourceIdentifier }),
   });
 
   if (!assetIdentityMatches(position.asset, validatedPrice.asset)) {

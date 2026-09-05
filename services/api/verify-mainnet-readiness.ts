@@ -1,6 +1,7 @@
 import {
   createBaseMainnetB20Adapter,
   createBasePublicClient,
+  createConfiguredChainlinkReferencePriceProvider,
   createZeroXSwapClient,
   readErc20Metadata,
   verifyB20Asset,
@@ -93,6 +94,18 @@ function printReport(result: MainnetReadinessReport): void {
     console.log(`exactApprovalAmount=${result.exactApprovalAmount}`);
   }
   if (result.accessRestriction) console.log(`accessRestriction=${result.accessRestriction}`);
+  if (result.referencePrice) {
+    console.log(`referencePriceProvider=${result.referencePrice.source}`);
+    console.log(`referencePriceScale=1e${result.referencePrice.priceDecimals}`);
+    console.log(`referencePriceTimestamp=${result.referencePrice.observedAt}`);
+    if (result.referencePrice.marketStatus) {
+      console.log(`referencePriceMarketStatus=${result.referencePrice.marketStatus}`);
+    }
+    if (result.referencePrice.sourceIdentifier) {
+      console.log(`referencePriceSourceId=${result.referencePrice.sourceIdentifier}`);
+    }
+    console.log("referencePriceFreshness=valid");
+  }
   if (result.quote) {
     console.log(`quoteTaker=${result.quote.taker}`);
     console.log(`quoteRawSellAmount=${result.quote.quotedRawSellAmount}`);
@@ -113,6 +126,7 @@ async function main(): Promise<void> {
   const client = createBasePublicClient();
   const executor = optionalAddress(process.env.VECTOR_EXECUTOR_ADDRESS);
   const smartAccount = optionalAddress(process.env.VECTOR_MAINNET_SMART_ACCOUNT);
+  const referencePriceProvider = createConfiguredChainlinkReferencePriceProvider();
   const dependencies: MainnetReadinessDependencies = {
     getChainId: () => client.getChainId(),
     getCode: (address) => client.getCode({ address }),
@@ -121,6 +135,9 @@ async function main(): Promise<void> {
         createZeroXSwapClient(),
         createBaseMainnetB20Adapter(client),
       ).getQuote(request),
+    ...(referencePriceProvider === undefined
+      ? {}
+      : { getReferencePrice: (asset) => referencePriceProvider.getPrice(asset) }),
     readExecutorAllowanceTargetApproval: (address, target) =>
       client.readContract({
         abi: EXECUTOR_READ_ABI,

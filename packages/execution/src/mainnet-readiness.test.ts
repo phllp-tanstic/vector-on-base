@@ -8,6 +8,7 @@ import {
   ZeroXError,
   type B20AssetVerificationResult,
 } from "@vector/integrations";
+import { createAssetPrice } from "@vector/portfolio";
 
 import {
   AUTHORIZATION_FIXTURE,
@@ -42,6 +43,14 @@ function createFixture() {
     getChainId: async () => 8453,
     getCode: async () => "0x01",
     getExecutionQuote: async () => quote,
+    getReferencePrice: async (asset) =>
+      createAssetPrice({
+        asset,
+        observedAt: input.nowSeconds,
+        price: candidate.currentBuyAssetReferencePrice!.price,
+        priceDecimals: candidate.currentBuyAssetReferencePrice!.priceDecimals,
+        source: candidate.currentBuyAssetReferencePrice!.source,
+      }),
     readExecutorAllowanceTargetApproval: async () => true,
     readExecutorAssetSupport: async () => true,
     readExecutorExecutionTargetApproval: async () => true,
@@ -173,6 +182,69 @@ describe("Base Mainnet execution readiness", () => {
 
     assert.equal(result.state, "REFERENCE_PRICE_PROVIDER_MISSING");
     assert.ok(result.quote);
+    assert.equal(result.checks.find((check) => check.name === "reference-price")?.status, "PASSED");
+  });
+
+  it("fails readiness when the provider is missing or unavailable", async () => {
+    const { dependencies, input } = createFixture();
+    const { getReferencePrice: _getReferencePrice, ...withoutProvider } = dependencies;
+    void _getReferencePrice;
+    const missing = await checkBaseMainnetExecutionReadiness(input, withoutProvider);
+    const unavailable = await checkBaseMainnetExecutionReadiness(input, {
+      ...dependencies,
+      getReferencePrice: async () => Promise.reject(new Error("provider unavailable")),
+    });
+
+    assert.equal(missing.state, "REFERENCE_PRICE_PROVIDER_MISSING");
+    assert.equal(unavailable.state, "REFERENCE_PRICE_PROVIDER_FAILURE");
+  });
+
+  it("requires risk triggers to use the provider reference rather than the execution quote", async () => {
+    const { dependencies, input, quote } = createFixture();
+    const result = await checkBaseMainnetExecutionReadiness(input, {
+      ...dependencies,
+      getReferencePrice: async (asset) =>
+        createAssetPrice({
+          asset,
+          observedAt: input.nowSeconds,
+          price: quote.quotedRawBuyAmount,
+          priceDecimals: 8,
+          source: "0x",
+        }),
+    });
+
+    assert.equal(result.state, "CONFIGURATION_ERROR");
+    assert.equal(
+      result.checks.find((check) => check.name === "risk-reference-binding")?.status,
+      "FAILED",
+    );
+  });
+
+  it("requires exposure values to be derived from the provider reference", async () => {
+    const { candidate, dependencies, input } = createFixture();
+    const result = await checkBaseMainnetExecutionReadiness(
+      {
+        ...input,
+        riskContext: {
+          ...input.riskContext,
+          candidate: {
+            ...candidate,
+            executionReferenceValuation: {
+              ...candidate.executionReferenceValuation,
+              proposedBuyReferenceValue:
+                candidate.executionReferenceValuation.proposedBuyReferenceValue + 1n,
+            },
+          },
+        },
+      },
+      dependencies,
+    );
+
+    assert.equal(result.state, "CONFIGURATION_ERROR");
+    assert.equal(
+      result.checks.find((check) => check.name === "risk-reference-valuation")?.status,
+      "FAILED",
+    );
   });
 
   it("keeps the CLI free of transaction and signing capabilities", () => {

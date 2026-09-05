@@ -8,6 +8,11 @@ import {
   type ZeroXExactSellRequest,
 } from "@vector/integrations";
 import {
+  USD_REFERENCE_VALUE_DECIMALS,
+  USD_REFERENCE_VALUE_SCALE,
+  type AssetPrice,
+} from "@vector/portfolio";
+import {
   validateExecutionCandidate,
   type ExecutionCandidate,
   type RiskValidationResult,
@@ -37,6 +42,7 @@ export const MAINNET_READINESS_STATES = [
   "RISK_REJECTED",
   "INVALID_QUOTE",
   "REFERENCE_PRICE_PROVIDER_MISSING",
+  "REFERENCE_PRICE_PROVIDER_FAILURE",
   "CONFIGURATION_ERROR",
 ] as const;
 
@@ -62,6 +68,7 @@ export interface MainnetReadinessReport {
   readonly exactApprovalAmount?: bigint;
   readonly plan?: VectorExecutionPlan;
   readonly quote?: VectorExecutionQuote;
+  readonly referencePrice?: AssetPrice;
   readonly riskResult?: RiskValidationResult;
   readonly selectedAsset?: B20VectorAsset;
   readonly smartAccountUsdcBalance?: bigint;
@@ -90,6 +97,7 @@ export interface MainnetReadinessDependencies {
   getChainId(): Promise<number>;
   getCode(address: EvmAddress): Promise<Hex | undefined>;
   getExecutionQuote(request: ZeroXExactSellRequest): Promise<VectorExecutionQuote>;
+  readonly getReferencePrice?: (asset: B20VectorAsset) => Promise<AssetPrice>;
   readExecutorAllowanceTargetApproval(executor: EvmAddress, target: EvmAddress): Promise<boolean>;
   readExecutorAssetSupport(executor: EvmAddress, asset: EvmAddress): Promise<boolean>;
   readExecutorExecutionTargetApproval(executor: EvmAddress, target: EvmAddress): Promise<boolean>;
@@ -206,6 +214,18 @@ function quoteIsCanonical(
   if (quote.transaction.value !== 0n) return "USDC AllowanceHolder quote value must be zero.";
   if (!Number.isFinite(Date.parse(quote.quoteTimestamp))) return "Quote timestamp is invalid.";
   return undefined;
+}
+
+function fixedPointReferenceValue(
+  economicAmount: bigint,
+  tokenDecimals: number,
+  price: bigint,
+  priceDecimals: number,
+): bigint {
+  return (
+    (economicAmount * price * USD_REFERENCE_VALUE_SCALE) /
+    (10n ** BigInt(tokenDecimals) * 10n ** BigInt(priceDecimals))
+  );
 }
 
 export async function checkBaseMainnetExecutionReadiness(
@@ -541,9 +561,9 @@ export async function checkBaseMainnetExecutionReadiness(
   );
   checks.push(passed("exact-approval", `Exact approval amount is ${quote.quotedRawSellAmount}.`));
 
-  if (!input.riskContext) {
+  if (!dependencies.getReferencePrice) {
     checks.push(
-      failed("reference-price", "No verified production reference-price context is configured."),
+      failed("reference-price", "No verified production reference-price provider is configured."),
     );
     return report(
       "REFERENCE_PRICE_PROVIDER_MISSING",
@@ -559,6 +579,58 @@ export async function checkBaseMainnetExecutionReadiness(
     );
   }
 
+  let referencePrice: AssetPrice;
+  try {
+    referencePrice = await dependencies.getReferencePrice(selectedAsset);
+    if (
+      referencePrice.asset.tokenAddress.toLowerCase() !==
+        selectedAsset.tokenAddress.toLowerCase() ||
+      referencePrice.asset.symbol !== selectedAsset.symbol ||
+      referencePrice.price <= 0n
+    ) {
+      throw new Error("Reference price does not match the selected verified stock.");
+    }
+    checks.push(
+      passed(
+        "reference-price",
+        `${referencePrice.source} returned a validated ${referencePrice.priceDecimals}-decimal reference.`,
+      ),
+    );
+  } catch (error) {
+    checks.push(
+      failed("reference-price", error instanceof Error ? error.message : "Reference read failed."),
+    );
+    return report(
+      "REFERENCE_PRICE_PROVIDER_FAILURE",
+      "The configured production reference-price provider failed closed.",
+      checks,
+      {
+        exactApprovalAmount: quote.quotedRawSellAmount,
+        executorAddress: executor,
+        executorOwner,
+        quote,
+        selectedAsset,
+      },
+    );
+  }
+
+  if (!input.riskContext) {
+    checks.push(failed("risk-context", "No risk snapshot is configured for the reference price."));
+    return report(
+      "REFERENCE_PRICE_PROVIDER_MISSING",
+      "A provider-backed portfolio and risk snapshot is required before production acceptance.",
+      checks,
+      {
+        exactApprovalAmount: quote.quotedRawSellAmount,
+        executorAddress: executor,
+        executorOwner,
+        quote,
+        referencePrice,
+        selectedAsset,
+      },
+    );
+  }
+
   const candidate = input.riskContext.candidate;
   if (candidate.executionQuote !== quote || !smartAccount || candidate.owner !== smartAccount) {
     checks.push(failed("risk-context", "Risk context does not bind this quote and Smart Account."));
@@ -569,6 +641,71 @@ export async function checkBaseMainnetExecutionReadiness(
       selectedAsset,
     });
   }
+
+  if (
+    !candidate.currentBuyAssetReferencePrice ||
+    candidate.currentBuyAssetReferencePrice.asset.tokenAddress.toLowerCase() !==
+      referencePrice.asset.tokenAddress.toLowerCase() ||
+    candidate.currentBuyAssetReferencePrice.price !== referencePrice.price ||
+    candidate.currentBuyAssetReferencePrice.priceDecimals !== referencePrice.priceDecimals ||
+    candidate.currentBuyAssetReferencePrice.source !== referencePrice.source
+  ) {
+    checks.push(
+      failed("risk-reference-binding", "Risk trigger price is not the provider snapshot."),
+    );
+    return report(
+      "CONFIGURATION_ERROR",
+      "Risk context is not bound to the verified reference-price snapshot.",
+      checks,
+      { executorAddress: executor, executorOwner, quote, referencePrice, selectedAsset },
+    );
+  }
+  checks.push(
+    passed("risk-reference-binding", "Risk trigger price is bound to the provider snapshot."),
+  );
+  const economicBuyAmount = quote.quotedB20EconomicBuyAmount;
+  const expectedQuotedSellReferenceValue = fixedPointReferenceValue(
+    quote.quotedRawSellAmount,
+    BASE_MAINNET_USDC.decimals,
+    USD_REFERENCE_VALUE_SCALE,
+    USD_REFERENCE_VALUE_DECIMALS,
+  );
+  const expectedProposedBuyReferenceValue =
+    economicBuyAmount === undefined
+      ? undefined
+      : fixedPointReferenceValue(
+          economicBuyAmount,
+          selectedAsset.decimals,
+          referencePrice.price,
+          referencePrice.priceDecimals,
+        );
+  if (
+    expectedProposedBuyReferenceValue === undefined ||
+    candidate.executionReferenceValuation.referenceValueDecimals !== USD_REFERENCE_VALUE_DECIMALS ||
+    candidate.executionReferenceValuation.quotedSellReferenceValue !==
+      expectedQuotedSellReferenceValue ||
+    candidate.executionReferenceValuation.proposedBuyReferenceValue !==
+      expectedProposedBuyReferenceValue
+  ) {
+    checks.push(
+      failed(
+        "risk-reference-valuation",
+        "Exposure valuation is not derived from the provider price and B20 economic amount.",
+      ),
+    );
+    return report(
+      "CONFIGURATION_ERROR",
+      "Risk exposure values are not bound to the verified reference-price snapshot.",
+      checks,
+      { executorAddress: executor, executorOwner, quote, referencePrice, selectedAsset },
+    );
+  }
+  checks.push(
+    passed(
+      "risk-reference-valuation",
+      "Exposure valuation uses provider price, B20 economic amount, and canonical USDC reference.",
+    ),
+  );
 
   const riskResult = validateExecutionCandidate(candidate, BASE_MAINNET_ASSET_REGISTRY);
   if (riskResult.status !== "ACCEPTED") {
@@ -586,6 +723,7 @@ export async function checkBaseMainnetExecutionReadiness(
         executorAddress: executor,
         executorOwner,
         quote,
+        referencePrice,
         riskResult,
         selectedAsset,
       },

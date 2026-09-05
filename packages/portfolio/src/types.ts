@@ -54,10 +54,13 @@ export interface PortfolioSnapshot {
 
 export interface AssetPrice {
   readonly asset: VectorAsset;
+  readonly marketStatus?: string;
   readonly observedAt: bigint;
   readonly price: ReferencePriceAmount;
   readonly priceDecimals: number;
+  readonly quoteCurrency?: string;
   readonly source: ReferencePriceSource;
+  readonly sourceIdentifier?: string;
 }
 
 export interface ValuedPosition {
@@ -238,10 +241,13 @@ export function createPortfolioSnapshot(input: {
 
 export function createAssetPrice(input: {
   readonly asset: VectorAsset;
+  readonly marketStatus?: string;
   readonly observedAt: bigint;
   readonly price: bigint;
   readonly priceDecimals: number;
+  readonly quoteCurrency?: string;
   readonly source: string;
+  readonly sourceIdentifier?: string;
 }): AssetPrice {
   if (
     !Number.isInteger(input.priceDecimals) ||
@@ -263,9 +269,12 @@ export function createAssetPrice(input: {
 
   return Object.freeze({
     asset: input.asset,
+    ...(input.marketStatus === undefined ? {} : { marketStatus: input.marketStatus }),
     observedAt: input.observedAt,
     price: referencePriceAmount(input.price),
     priceDecimals: input.priceDecimals,
+    ...(input.quoteCurrency === undefined ? {} : { quoteCurrency: input.quoteCurrency }),
     source: referencePriceSource(input.source),
+    ...(input.sourceIdentifier === undefined ? {} : { sourceIdentifier: input.sourceIdentifier }),
   });
 }

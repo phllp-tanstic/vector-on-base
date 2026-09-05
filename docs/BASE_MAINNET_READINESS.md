@@ -29,8 +29,10 @@ The production path is intentionally split across packages:
 
 Two limitations are deliberately reported rather than bypassed:
 
-- No verified production reference-price provider is currently wired to the live command. A 0x
-  execution quote is not an independent reference price.
+- Chainlink Data Streams is wired as the selected production reference-price provider, but it is
+  unavailable until server credentials, subscription entitlement, and a provider-backed risk
+  snapshot are configured. A 0x execution quote is not an independent reference price. See
+  [`REFERENCE_PRICE_PROVIDER.md`](./REFERENCE_PRICE_PROVIDER.md).
 - With the executor as 0x taker, a quote may expose a balance or incomplete-simulation issue because
   the executor is funded only inside the atomic execution. Existing risk checks still reject those
   issues; readiness does not suppress them.
@@ -42,6 +44,8 @@ Configure server-side environment values and run:
 ```sh
 BASE_RPC_URL="https://your-base-mainnet-rpc" \
 ZEROX_API_KEY="your-0x-key" \
+CHAINLINK_DATA_STREAMS_API_KEY="your-chainlink-key" \
+CHAINLINK_DATA_STREAMS_USER_SECRET="your-chainlink-secret" \
 VECTOR_EXECUTOR_ADDRESS="0xProductionExecutor" \
 VECTOR_MAINNET_SMART_ACCOUNT="0xOptionalSmartAccount" \
 VECTOR_MAINNET_STOCK_SYMBOL="NVDAc" \
@@ -57,10 +61,10 @@ present, it must be a valid non-zero address and its canonical USDC balance is c
 asset. The currently verified stock boundary is `NVDAc`, `AAPLc`, `GOOGLc`, and `METAc`. The raw
 sell amount defaults to `1000000`, and slippage is fixed at 30 basis points.
 
-The command's dependency surface contains only RPC reads and a 0x HTTPS quote read. It imports no
-wallet, signer, Coinbase authorization, contract-write, or UserOperation submission capability.
-Automated tests scan the command for those prohibited capabilities. It exits non-zero for every
-state other than `READY`.
+The command's dependency surface contains only RPC reads, a 0x HTTPS quote read, and an authenticated
+Chainlink Data Streams reference read. It imports no wallet, signer, Coinbase authorization,
+contract-write, or UserOperation submission capability. Automated tests scan the command for those
+prohibited capabilities. It exits non-zero for every state other than `READY`.
 
 ## States
 
@@ -81,7 +85,9 @@ state other than `READY`.
 - `RISK_REJECTED`: the independent deterministic risk engine rejected the candidate.
 - `INVALID_QUOTE`: quote fields or canonical intent/plan construction failed validation.
 - `REFERENCE_PRICE_PROVIDER_MISSING`: executable quote and contract checks progressed, but no
-  verified independent reference-price context exists for risk evaluation.
+  configured provider or provider-backed portfolio/risk context exists for risk evaluation.
+- `REFERENCE_PRICE_PROVIDER_FAILURE`: the configured provider was unavailable or returned a report
+  that failed identity, currency, price, timestamp, session, schema, or freshness validation.
 - `CONFIGURATION_ERROR`: RPC chain, executor ownership, target approvals, environment, or another
   required dependency is invalid or unreadable.
 
@@ -106,8 +112,8 @@ unsupported Base token, or an untyped quote error.
   is exact; a quote-provided address alone grants no trust;
 - that recognized AllowanceHolder is already approved in both semantic mappings on the deployed
   executor;
-- a verified reference-price/portfolio context binds the same quote and Smart Account, and risk
-  accepts it;
+- a verified reference-price/portfolio context binds the same quote and Smart Account; trigger and
+  exposure values bind to that provider snapshot and B20 economic amount; and risk accepts it;
 - the production builder creates exactly `approve(executor, quotedSellAmount)` followed by
   `executor.execute(intent)` with its bounded nonce and deadline.
 
@@ -116,9 +122,10 @@ unsupported Base token, or an untyped quote error.
 The execution quote answers what 0x may execute; it must not become the oracle used to judge its own
 fairness. Independent reference prices are required for stock-price triggers, quote/reference value
 comparison, portfolio valuation, and maximum single-asset exposure. Raw USDC balance and minimum
-reserve checks do not replace those prices. Until a production provider with freshness, provenance,
-decimal, market-hours, and failure-policy guarantees is selected and wired, the live command must
-stop at `REFERENCE_PRICE_PROVIDER_MISSING` rather than fabricate `READY`.
+reserve checks do not replace those prices. The selected Chainlink adapter enforces provenance,
+decimal, market-session, and freshness policy. Without entitled credentials and a snapshot derived
+from those prices, the live command stops at `REFERENCE_PRICE_PROVIDER_MISSING` rather than
+fabricating `READY`.
 
 ## Executor target policy
 
