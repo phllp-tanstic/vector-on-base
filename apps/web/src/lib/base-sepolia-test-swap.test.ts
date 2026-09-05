@@ -45,14 +45,8 @@ describe("Base Sepolia browser test-swap fixture", () => {
 
   it("matches the deployed router sellToken and buyToken roles", () => {
     const plan = prepare();
-    assert.equal(
-      plan.intent.sellToken,
-      "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9",
-    );
-    assert.equal(
-      plan.intent.buyToken,
-      "0x7d8D51976eB74A7949116732521e48B08d0c92Fd",
-    );
+    assert.equal(plan.intent.sellToken, "0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9");
+    assert.equal(plan.intent.buyToken, "0x7d8D51976eB74A7949116732521e48B08d0c92Fd");
   });
 
   it("constructs nothing until an explicit prepare action", () => {

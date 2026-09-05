@@ -9,7 +9,7 @@ import { type ZeroXExactSellRequest, ZeroXError } from "./types.ts";
 
 const TAKER = "0x0000000000000000000000000000000000000001" as const;
 const ALLOWANCE_TARGET = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
-const TRANSACTION_TARGET = "0x0000000000000000000000000000000000000002" as const;
+const TRANSACTION_TARGET = ALLOWANCE_TARGET;
 const nvdac = BASE_MAINNET_TOKENIZED_STOCKS[0];
 
 function request(overrides: Partial<ZeroXExactSellRequest> = {}): ZeroXExactSellRequest {
@@ -142,13 +142,17 @@ describe("0x AllowanceHolder v2 client", () => {
     );
   });
 
-  it("rejects zero buy amounts and sell amounts above the exact-sell maximum", async () => {
+  it("rejects zero buy amounts and any exact-sell amount mismatch", async () => {
     await assert.rejects(
       client(new MockTransport({ ...responseBody(), buyAmount: "0" })).getPrice(request()),
       (error: unknown) => error instanceof ZeroXError && error.code === "QUOTE_VALIDATION_ERROR",
     );
     await assert.rejects(
       client(new MockTransport({ ...responseBody(), sellAmount: "1000001" })).getPrice(request()),
+      (error: unknown) => error instanceof ZeroXError && error.code === "QUOTE_VALIDATION_ERROR",
+    );
+    await assert.rejects(
+      client(new MockTransport({ ...responseBody(), sellAmount: "999999" })).getPrice(request()),
       (error: unknown) => error instanceof ZeroXError && error.code === "QUOTE_VALIDATION_ERROR",
     );
   });

@@ -39,12 +39,21 @@ The quote must be generated with `VectorExecutor` as the 0x taker and must deliv
 the executor. Direct-to-recipient router output is intentionally rejected because it cannot be
 verified as an executor balance delta.
 
-0x Swap API v2 distinguishes the allowance target from the execution entry point. Official 0x
-guidance says allowances must be set only on the API-returned AllowanceHolder or Permit2 address,
-never on Settler, while executable calldata is sent to `transaction.to`. Vector therefore stores no
-hardcoded 0x address and requires governance to approve each role independently. References:
+For Vector's ERC-20 `/swap/allowance-holder` flow, current 0x Swap API v2 semantics require
+`transaction.to` and `allowanceTarget` to be the same official AllowanceHolder; a non-null
+`issues.allowance.spender` must match them. The only documented case where this endpoint targets
+the latest Settler instead is a native-ETH sell, which does not apply to Vector's Base USDC flow.
+Settler must never receive ERC-20 approval. Permit2 is a separate execution model and is not mixed
+into this policy. References:
 [0x contract architecture](https://docs.0x.org/docs/core-concepts/contracts) and
-[0x Swap API quickstart](https://docs.0x.org/docs/introduction/quickstart/swap-tokens-with-0x-swap-api).
+[0x v2 upgrade guide](https://docs.0x.org/docs/upgrading/upgrading-to-swap-v2).
+
+The offchain boundary recognizes AllowanceHolder deployments only through the versioned Base
+manifest in `packages/integrations/src/zerox/trusted-contracts.ts`; quote responses cannot extend
+it. The executor's execution-target and allowance-target mappings remain separate semantic
+permissions even though the same AllowanceHolder address is enabled in both. This preserves
+independent revocation and prevents an address approved only for calls from receiving allowance (or
+an allowance-only address from receiving arbitrary calldata).
 
 ## Storage and administration
 

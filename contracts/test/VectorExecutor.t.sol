@@ -89,6 +89,39 @@ contract VectorExecutorTest is Test {
         assertTrue(executor.usedNonce(ownerAccount, 1));
     }
 
+    function test_AllowanceHolderShapedFlowUsesExactApprovalsAndRefundsUnusedSell() public {
+        uint256 sellMaximum = 100 ether;
+        uint256 sellUsed = 60 ether;
+        uint256 buyReceived = 75 ether;
+        uint256 minimumBuy = 70 ether;
+        uint256 nonce = 32;
+
+        vm.startPrank(ownerAccount);
+        sellToken.approve(address(executor), 0);
+        sellToken.approve(address(executor), sellMaximum);
+        vm.stopPrank();
+
+        VectorExecutor.ExecutionIntent memory intent =
+            _intentWithRoute(sellMaximum, sellUsed, buyReceived, minimumBuy, nonce, address(executor));
+        assertEq(intent.executionTarget, intent.allowanceTarget);
+        assertEq(sellToken.allowance(ownerAccount, address(executor)), sellMaximum);
+
+        vm.prank(ownerAccount);
+        (, uint256 actualSell, uint256 actualBuy) = executor.execute(intent);
+
+        assertEq(actualSell, sellUsed);
+        assertEq(actualBuy, buyReceived);
+        assertGe(actualBuy, minimumBuy);
+        assertEq(sellToken.allowance(ownerAccount, address(executor)), 0);
+        assertEq(router.maximumAllowanceObserved(), sellMaximum);
+        assertEq(sellToken.allowance(address(executor), address(router)), 0);
+        assertEq(sellToken.balanceOf(ownerAccount), OWNER_BALANCE - sellUsed);
+        assertEq(sellToken.balanceOf(address(router)), sellUsed);
+        assertEq(sellToken.balanceOf(address(executor)), 0);
+        assertEq(buyToken.balanceOf(recipient), buyReceived);
+        assertTrue(executor.usedNonce(ownerAccount, nonce));
+    }
+
     function test_EmitsDeterministicExecutionEvent() public {
         VectorExecutor.ExecutionIntent memory intent = _intent(100 ether, 125 ether, 120 ether, 2);
         bytes32 executionId = executor.hashExecutionIntent(intent);

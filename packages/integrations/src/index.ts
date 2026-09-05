@@ -10,4 +10,5 @@ export * from "./coinbase/smart-account.ts";
 export * from "./vector/config.ts";
 export * from "./zerox/client.ts";
 export * from "./zerox/config.ts";
+export * from "./zerox/trusted-contracts.ts";
 export * from "./zerox/types.ts";

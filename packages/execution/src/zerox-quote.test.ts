@@ -12,11 +12,12 @@ import { VECTOR_CHAIN_ID } from "@vector/shared";
 
 import { ExecutionQuoteValidationError } from "./external-quote.ts";
 import { buildZeroXExecutionQuote } from "./zerox-quote.ts";
+import { ZeroXTargetValidationError } from "./zerox-target-policy.ts";
 
 const nvdac = BASE_MAINNET_TOKENIZED_STOCKS[0];
 const TAKER = "0x0000000000000000000000000000000000000001" as const;
 const ALLOWANCE_TARGET = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
-const TRANSACTION_TARGET = "0x0000000000000000000000000000000000000002" as const;
+const TRANSACTION_TARGET = ALLOWANCE_TARGET;
 const CAPTURED_AT = new Date("2026-09-04T12:00:00.000Z");
 
 function request(): ZeroXExactSellRequest {
@@ -82,6 +83,10 @@ function isValidationError(error: unknown): boolean {
   return error instanceof ExecutionQuoteValidationError && error.code === "QUOTE_VALIDATION_ERROR";
 }
 
+function hasTargetCode(code: ZeroXTargetValidationError["code"]) {
+  return (error: unknown) => error instanceof ZeroXTargetValidationError && error.code === code;
+}
+
 describe("normalized 0x execution quote", () => {
   it("keeps raw swap units distinct from derived B20 economic units", () => {
     const result = build();
@@ -122,9 +127,10 @@ describe("normalized 0x execution quote", () => {
     );
   });
 
-  it("rejects zero buy amounts and sell amounts over the requested maximum", () => {
+  it("rejects zero buy amounts and any exact-sell amount mismatch", () => {
     assert.throws(() => build({ ...quote(), buyAmount: 0n }), isValidationError);
     assert.throws(() => build({ ...quote(), sellAmount: 1_000_001n }), isValidationError);
+    assert.throws(() => build({ ...quote(), sellAmount: 999_999n }), isValidationError);
   });
 
   it("rejects malformed transaction targets, calldata, and values", () => {
@@ -137,7 +143,7 @@ describe("normalized 0x execution quote", () => {
             to: "0x0000000000000000000000000000000000000000",
           },
         }),
-      isValidationError,
+      hasTargetCode("ZERO_TARGET"),
     );
     assert.throws(
       () =>
@@ -148,11 +154,19 @@ describe("normalized 0x execution quote", () => {
       isValidationError,
     );
     assert.throws(
+      () => build({ ...quote(), transaction: { ...quote().transaction, data: "0x" } }),
+      isValidationError,
+    );
+    assert.throws(
       () =>
         build({
           ...quote(),
           transaction: { ...quote().transaction, value: "0" as unknown as bigint },
         }),
+      isValidationError,
+    );
+    assert.throws(
+      () => build({ ...quote(), transaction: { ...quote().transaction, value: 1n } }),
       isValidationError,
     );
   });
@@ -174,7 +188,7 @@ describe("normalized 0x execution quote", () => {
             },
           },
         }),
-      isValidationError,
+      hasTargetCode("ALLOWANCE_TARGET_MISMATCH"),
     );
   });
 });

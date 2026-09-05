@@ -20,6 +20,7 @@ import {
 } from "viem";
 
 import type { VectorExecutionQuote } from "./external-quote.ts";
+import { validateZeroXAllowanceHolderTargets } from "./zerox-target-policy.ts";
 
 const MAX_UINT256 = (1n << 256n) - 1n;
 const BYTE_ALIGNED_HEX_PATTERN = /^0x(?:[0-9a-fA-F]{2})+$/;
@@ -399,7 +400,7 @@ export function buildVectorExecutionIntent(
     !sameAsset(quote.sellAsset, candidate.sellAsset) ||
     !sameAsset(quote.buyAsset, candidate.buyAsset) ||
     quote.requestedRawSellAmount !== candidate.requestedRawSellAmount ||
-    quote.quotedRawSellAmount > quote.requestedRawSellAmount ||
+    quote.quotedRawSellAmount !== quote.requestedRawSellAmount ||
     !sameAddress(quote.taker, executor)
   ) {
     throw new ExecutionPlanValidationError(
@@ -431,8 +432,15 @@ export function buildVectorExecutionIntent(
     throw new ExecutionPlanValidationError("CANDIDATE_EXPIRED", "Execution deadline has expired.");
   }
 
-  const executionTarget = requireAddress(quote.transaction.target, "executionTarget");
-  const allowanceTarget = requireAddress(quote.allowanceTarget ?? undefined, "allowanceTarget");
+  const targets =
+    input.trustedConfig.environment === "LOCAL_AUTHORIZATION_HARNESS"
+      ? {
+          allowanceHolder: requireAddress(quote.allowanceTarget ?? undefined, "allowanceTarget"),
+          executionTarget: requireAddress(quote.transaction.target, "executionTarget"),
+        }
+      : validateZeroXAllowanceHolderTargets(quote);
+  const executionTarget = targets.executionTarget;
+  const allowanceTarget = targets.allowanceHolder;
   if (!isApproved(executionTarget, input.trustedConfig.approvedExecutionTargets)) {
     throw new ExecutionPlanValidationError(
       "EXECUTION_TARGET_UNAPPROVED",
@@ -452,6 +460,15 @@ export function buildVectorExecutionIntent(
     );
   }
   requireUint256(quote.transaction.value, "executionValue", "INVALID_NATIVE_VALUE", true);
+  if (
+    input.trustedConfig.environment !== "LOCAL_AUTHORIZATION_HARNESS" &&
+    quote.transaction.value !== 0n
+  ) {
+    throw new ExecutionPlanValidationError(
+      "INVALID_NATIVE_VALUE",
+      "Base USDC AllowanceHolder execution must have zero transaction value.",
+    );
+  }
 
   const intent = Object.freeze({
     allowanceTarget,

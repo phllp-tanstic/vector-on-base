@@ -1,5 +1,8 @@
 # B20 amount invariant
 
+Base Mainnet BStocks production-readiness checks and their explicit non-submission boundary are
+documented in [`BASE_MAINNET_READINESS.md`](./BASE_MAINNET_READINESS.md).
+
 B20 `balanceOf()` values are canonical raw token amounts used for transfers and execution.
 Vector derives UI/economic exposure with exact integer arithmetic:
 `floor(rawAmount * multiplier / 1e18)`. The reverse conversion also rounds down.

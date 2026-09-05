@@ -7,42 +7,18 @@ import {
   type ZeroXSwapClient,
 } from "@vector/integrations";
 import { VECTOR_CHAIN_ID, type EvmAddress } from "@vector/shared";
-import { isAddress, isHex, zeroAddress } from "viem";
+import { isHex } from "viem";
 
 import { ExecutionQuoteValidationError, type VectorExecutionQuote } from "./external-quote.ts";
+import { validateZeroXAllowanceHolderTargets } from "./zerox-target-policy.ts";
 
 function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
 }
 
-function validateNonZeroAddress(value: string, field: string): asserts value is EvmAddress {
-  if (!isAddress(value, { strict: false }) || sameAddress(value, zeroAddress)) {
-    throw new ExecutionQuoteValidationError(`${field} must be a valid non-zero address.`);
-  }
-}
-
 function resolveAllowanceTarget(quote: ZeroXFirmQuote): EvmAddress | null {
   const issueSpender = quote.issues.allowance?.spender ?? null;
-
-  if (quote.allowanceTarget !== null) {
-    validateNonZeroAddress(quote.allowanceTarget, "0x allowanceTarget");
-  }
-
-  if (issueSpender !== null) {
-    validateNonZeroAddress(issueSpender, "0x allowance issue spender");
-  }
-
-  if (
-    quote.allowanceTarget !== null &&
-    issueSpender !== null &&
-    !sameAddress(quote.allowanceTarget, issueSpender)
-  ) {
-    throw new ExecutionQuoteValidationError(
-      "0x returned conflicting allowance target and allowance issue spender addresses.",
-    );
-  }
-
-  return issueSpender ?? quote.allowanceTarget;
+  return quote.allowanceTarget ?? issueSpender;
 }
 
 export interface BuildZeroXExecutionQuoteInput {
@@ -70,9 +46,9 @@ export function buildZeroXExecutionQuote({
     throw new ExecutionQuoteValidationError("0x returned the wrong buy token.");
   }
 
-  if (quote.sellAmount > request.sellAmount) {
+  if (quote.sellAmount !== request.sellAmount) {
     throw new ExecutionQuoteValidationError(
-      "0x sell amount exceeds the requested exact-sell maximum.",
+      "0x sell amount must exactly match the requested exact-sell amount.",
     );
   }
 
@@ -80,15 +56,20 @@ export function buildZeroXExecutionQuote({
     throw new ExecutionQuoteValidationError("0x buy amount must be positive.");
   }
 
-  validateNonZeroAddress(quote.transaction.to, "0x transaction target");
-
-  if (!isHex(quote.transaction.data) || !/^0x(?:[0-9a-fA-F]{2})*$/.test(quote.transaction.data)) {
-    throw new ExecutionQuoteValidationError("0x transaction calldata must be byte-aligned hex.");
+  if (!isHex(quote.transaction.data) || !/^0x(?:[0-9a-fA-F]{2})+$/.test(quote.transaction.data)) {
+    throw new ExecutionQuoteValidationError(
+      "0x transaction calldata must be non-empty byte-aligned hex.",
+    );
   }
 
   if (typeof quote.transaction.value !== "bigint" || quote.transaction.value < 0n) {
     throw new ExecutionQuoteValidationError(
       "0x transaction value must be a non-negative bigint-compatible value.",
+    );
+  }
+  if (quote.transaction.value !== 0n) {
+    throw new ExecutionQuoteValidationError(
+      "ERC-20 AllowanceHolder quotes must not require native transaction value.",
     );
   }
 
@@ -108,7 +89,7 @@ export function buildZeroXExecutionQuote({
     ...new Set(quote.route.fills.map((fill) => fill.source)),
   ]);
 
-  return Object.freeze({
+  const executionQuote = Object.freeze({
     allowanceTarget: resolveAllowanceTarget(quote),
     buyAsset: request.buyAsset,
     chainId: VECTOR_CHAIN_ID,
@@ -132,7 +113,9 @@ export function buildZeroXExecutionQuote({
       target: quote.transaction.to,
       value: quote.transaction.value,
     }),
-  });
+  }) satisfies VectorExecutionQuote;
+  validateZeroXAllowanceHolderTargets(executionQuote);
+  return executionQuote;
 }
 
 interface ZeroXFirmQuoteReader {

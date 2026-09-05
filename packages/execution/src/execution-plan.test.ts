@@ -40,7 +40,7 @@ describe("Vector execution authorization plan", () => {
     assert.equal(plan.calls[0].value, 0n);
     assert.equal(plan.calls[1].type, "VECTOR_EXECUTION");
     assert.equal(plan.calls[1].to, AUTHORIZATION_FIXTURE.executor);
-    assert.equal(plan.calls[1].value, 7n);
+    assert.equal(plan.calls[1].value, 0n);
   });
 
   it("encodes exact approval and round-trips every Solidity intent field", () => {
@@ -62,7 +62,7 @@ describe("Vector execution authorization plan", () => {
     assert.equal(intent.recipient, AUTHORIZATION_FIXTURE.recipient);
     assert.equal(intent.executionTarget, AUTHORIZATION_FIXTURE.executionTarget);
     assert.equal(intent.allowanceTarget, AUTHORIZATION_FIXTURE.allowanceTarget);
-    assert.equal(intent.executionValue, 7n);
+    assert.equal(intent.executionValue, 0n);
     assert.equal(intent.deadline, 1_800_000_300n);
     assert.equal(intent.nonce, 42n);
     assert.equal(intent.executionData, "0x12345678");
@@ -257,19 +257,28 @@ describe("Vector execution authorization plan", () => {
         }),
       hasCode("INVALID_CALLDATA"),
     );
-    for (const quote of [
-      { ...createAuthorizationFixtureQuote(), quotedRawSellAmount: 0n },
-      { ...createAuthorizationFixtureQuote(), minBuyAmount: 0n },
-    ]) {
-      assert.throws(
-        () =>
-          buildVectorExecutionPlan({
-            ...input,
-            candidate: createAuthorizationFixtureCandidate(quote),
+    assert.throws(
+      () =>
+        buildVectorExecutionPlan({
+          ...input,
+          candidate: createAuthorizationFixtureCandidate({
+            ...createAuthorizationFixtureQuote(),
+            quotedRawSellAmount: 0n,
           }),
-        hasCode("INVALID_AMOUNT"),
-      );
-    }
+        }),
+      hasCode("QUOTE_INVALID"),
+    );
+    assert.throws(
+      () =>
+        buildVectorExecutionPlan({
+          ...input,
+          candidate: createAuthorizationFixtureCandidate({
+            ...createAuthorizationFixtureQuote(),
+            minBuyAmount: 0n,
+          }),
+        }),
+      hasCode("INVALID_AMOUNT"),
+    );
     assert.throws(
       () =>
         buildVectorExecutionPlan({
@@ -321,6 +330,7 @@ describe("Vector execution authorization plan", () => {
     assert.notEqual(plan.calls[0].amount, maxUint256);
     assert.equal(plan.calls[0].spender, plan.executor);
     assert.notEqual(plan.calls[0].spender.toLowerCase(), plan.allowanceTarget.toLowerCase());
+    assert.equal(plan.executionTarget, plan.allowanceTarget);
     assert.deepEqual(
       plan.calls.map((call) => call.type),
       ["ERC20_APPROVAL", "VECTOR_EXECUTION"],

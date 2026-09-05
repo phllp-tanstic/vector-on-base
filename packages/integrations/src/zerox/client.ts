@@ -47,7 +47,7 @@ const nonZeroAddressSchema = addressSchema.refine(
 
 const calldataSchema = z
   .string()
-  .regex(/^0x(?:[0-9a-fA-F]{2})*$/)
+  .regex(/^0x(?:[0-9a-fA-F]{2})+$/)
   .transform((value) => value as Hex);
 
 const issuesSchema = z.object({
@@ -366,8 +366,11 @@ function validateReturnedAmountsAndTokens(
     throw new ZeroXError("QUOTE_VALIDATION_ERROR", "0x returned the wrong buy token.");
   }
 
-  if (response.sellAmount > request.sellAmount) {
-    throw new ZeroXError("QUOTE_VALIDATION_ERROR", "0x sell amount exceeds the requested maximum.");
+  if (response.sellAmount !== request.sellAmount) {
+    throw new ZeroXError(
+      "QUOTE_VALIDATION_ERROR",
+      "0x sell amount must equal the requested exact-sell amount.",
+    );
   }
 
   if (response.buyAmount <= 0n) {

@@ -14,7 +14,7 @@ import type { BuildVectorExecutionPlanInput } from "./execution-plan.ts";
 export const AUTHORIZATION_FIXTURE = Object.freeze({
   allowanceTarget: "0x0000000000001fF3684f28c67538d4D072C22734" as const,
   currentTimestamp: 1_800_000_000n,
-  executionTarget: "0x0000000000000000000000000000000000000020" as const,
+  executionTarget: "0x0000000000001fF3684f28c67538d4D072C22734" as const,
   executor: "0x0000000000000000000000000000000000000010" as const,
   nonce: 42n,
   owner: "0x0000000000000000000000000000000000000001" as const,
@@ -28,7 +28,7 @@ export function createAuthorizationFixtureQuote(): VectorExecutionQuote {
     buyAsset,
     chainId: VECTOR_CHAIN_ID,
     issues: {
-      allowance: null,
+      allowance: { actual: 0n, spender: AUTHORIZATION_FIXTURE.allowanceTarget },
       balance: null,
       invalidSourcesPassed: [],
       simulationIncomplete: false,
@@ -50,7 +50,7 @@ export function createAuthorizationFixtureQuote(): VectorExecutionQuote {
     transaction: {
       data: "0x12345678" as const,
       target: AUTHORIZATION_FIXTURE.executionTarget,
-      value: 7n,
+      value: 0n,
     },
   } as const satisfies VectorExecutionQuote;
   return Object.freeze(quote);

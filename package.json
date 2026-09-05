@@ -20,6 +20,7 @@
     "test": "node --test \"packages/**/*.test.ts\" \"apps/**/*.test.ts\"",
     "verify:authorization": "node services/api/verify-authorization.ts",
     "verify:e2e": "node services/api/verify-e2e.ts",
+    "verify:mainnet-readiness": "node --env-file-if-exists=.env services/api/verify-mainnet-readiness.ts",
     "verify:base": "node packages/integrations/scripts/verify-base.ts",
     "verify:portfolio": "node services/api/verify-portfolio.ts",
     "verify:risk": "node services/api/verify-risk.ts",
