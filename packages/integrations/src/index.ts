@@ -8,6 +8,7 @@ export * from "./base/network.ts";
 export * from "./base/portfolio-balances.ts";
 export * from "./chainlink/reference-price-manifest.ts";
 export * from "./chainlink/reference-price.ts";
+export * from "./chainlink/reference-snapshot.ts";
 export * from "./coinbase/smart-account.ts";
 export * from "./vector/config.ts";
 export * from "./zerox/client.ts";

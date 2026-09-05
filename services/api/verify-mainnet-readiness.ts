@@ -1,6 +1,7 @@
 import {
   createBaseMainnetB20Adapter,
   createBasePublicClient,
+  captureChainlinkReferencePriceSnapshot,
   createConfiguredChainlinkReferencePriceProvider,
   createZeroXSwapClient,
   readErc20Metadata,
@@ -106,6 +107,9 @@ function printReport(result: MainnetReadinessReport): void {
     }
     console.log("referencePriceFreshness=valid");
   }
+  if (result.referenceSnapshotId) {
+    console.log(`referenceSnapshotId=${result.referenceSnapshotId}`);
+  }
   if (result.quote) {
     console.log(`quoteTaker=${result.quote.taker}`);
     console.log(`quoteRawSellAmount=${result.quote.quotedRawSellAmount}`);
@@ -137,7 +141,10 @@ async function main(): Promise<void> {
       ).getQuote(request),
     ...(referencePriceProvider === undefined
       ? {}
-      : { getReferencePrice: (asset) => referencePriceProvider.getPrice(asset) }),
+      : {
+          getReferencePriceSnapshot: () =>
+            captureChainlinkReferencePriceSnapshot({ provider: referencePriceProvider }),
+        }),
     readExecutorAllowanceTargetApproval: (address, target) =>
       client.readContract({
         abi: EXECUTOR_READ_ABI,

@@ -60,7 +60,14 @@ The selected underlying-equity V11 reports do not carry B20/xStock multipliers. 
 - portfolio valuation multiplies the B20 economic amount by the underlying reference price using bigint fixed-point arithmetic;
 - no oracle adapter changes token transfer or execution units.
 
-Operational corporate-action monitoring and a bounded transition/circuit-breaker policy remain required before unmonitored production operation.
+The fail-safe operating policy is to pause affected valuation, trigger, risk acceptance, and execution readiness until a reviewed manifest release resolves the event:
+
+- **Stock splits:** pause across the effective window until the post-split Chainlink basis and the B20 multiplier/economic amount are independently reconciled; never compensate by editing the oracle price or guessing a ratio.
+- **Symbol changes:** add a reviewed registry and manifest version that preserves exact issuer/share-class identity; never reassign a feed using ticker similarity.
+- **Delistings:** disable the registered asset and reject new readiness decisions. A carried-forward or closed price is not permission to trade.
+- **Provider feed migrations:** pin the replacement feed ID only after schema, underlying, quote, phase, entitlement, live/decommission state, and transition observations are reviewed. Release it as a deliberate versioned manifest change; never follow provider aliases automatically.
+
+Operational monitoring and these pause/review controls remain required before unmonitored production operation. The V11 report does not currently provide enough deterministic corporate-action metadata to automate them safely.
 
 ## Candidates evaluated
 
@@ -86,7 +93,31 @@ Coinbase documents public product/ticker market data for exchange trading pairs 
 
 The production adapter is server-only and implements the existing `ReferencePriceProvider`. It uses the official Chainlink TypeScript SDK to authenticate, fetch, and decode V11 reports. It returns the Vector asset, bigint price, 18 decimals, mid publication/observation timestamp, provider, exact feed ID, USD quote currency, and normalized market status.
 
-`verify:mainnet-readiness` remains read-only. When both `CHAINLINK_DATA_STREAMS_API_KEY` and `CHAINLINK_DATA_STREAMS_USER_SECRET` are absent, no provider is constructed and readiness retains `REFERENCE_PRICE_PROVIDER_MISSING`. Partial configuration is a configuration error. An authenticated read/decode/freshness failure produces `REFERENCE_PRICE_PROVIDER_FAILURE`. A successful read passes the reference-price check, but production readiness still requires a provider-backed portfolio/risk snapshot and all existing executor, quote, asset, and risk checks.
+`verify:mainnet-readiness` remains read-only. When both `CHAINLINK_DATA_STREAMS_API_KEY` and `CHAINLINK_DATA_STREAMS_USER_SECRET` are absent, no provider is constructed; after earlier executor and quote prerequisites pass, readiness reports `REFERENCE_PRICE_PROVIDER_MISSING`. Until an executor is deployed, the earlier and more actionable top-level state remains `EXECUTOR_NOT_CONFIGURED`. Partial configuration is a configuration error. An authenticated read/decode/freshness failure produces `REFERENCE_PRICE_PROVIDER_FAILURE`. A successful read passes the reference-price check, but production readiness still requires a provider-backed portfolio/risk snapshot and all existing executor, quote, asset, and risk checks.
+
+## Operational read-only verification
+
+Set both server-only credentials in the ignored root `.env`, then run:
+
+```sh
+npm run verify:reference-prices
+```
+
+The command has no wallet, signer, contract-write, transaction-broadcast, or UserOperation capability. It captures `NVDAc`, `AAPLc`, `GOOGLc`, and `METAc` into one immutable snapshot and prints its deterministic ID, creation time, manifest version, and each constituent's symbol, underlying, provider, selected feed ID and role, market status, integer price, decimals, report timestamp, age, and freshness result. It routes from the provider's V11 `marketStatus`; it never infers a session from the local clock.
+
+`VECTOR_MAINNET_SMART_ACCOUNT` is optional. When absent, the portfolio read is explicitly skipped. When present, the same read-only command reads registered Base Mainnet balances at one block, applies B20 economic amounts, values them with the already captured Chainlink snapshot, and creates the risk projection. No 0x price participates in that valuation.
+
+Startup and provider failures are stable typed codes: `CREDENTIALS_MISSING`, `API_KEY_MISSING`, `USER_SECRET_MISSING`, `MALFORMED_CONFIGURATION`, `AUTHENTICATION_FAILED`, `FEED_ENTITLEMENT_DENIED`, `FEED_NOT_FOUND`, `RATE_LIMITED`, `PROVIDER_UNAVAILABLE`, `MALFORMED_REPORT`, `STALE_REPORT`, and `MARKET_STATUS_UNSUPPORTED`. Entitlement denial is not relabeled as price unavailability. Error messages contain neither credentials nor HMAC inputs. The credentials exist only at the server adapter boundary, `.env.example` contains empty placeholders, and `.env` remains ignored.
+
+## Coherent snapshot and risk binding
+
+One capture requests each required stock once through the session-routing adapter, then validates every constituent against a single completion timestamp. Construction fails if any price is missing, stale, future-dated, misidentified, malformed, or unsupported at completion. The snapshot ID hashes the manifest version, creation time, asset identities, prices and precision, provider timestamps, feed IDs, statuses, and selected feed roles.
+
+Portfolio and risk construction revalidates the immutable snapshot and records a second deterministic hash that binds the reference snapshot ID to the Smart Account, Base block, raw and economic balances, and computed USD values. Trigger evaluation and proposed-buy exposure use the selected Chainlink constituent. `minBuyAmount` and raw execution amounts remain exclusively quote fields; a 0x quote cannot replace or alter the captured reference price. Mainnet readiness compares the risk context's snapshot ID and price fields with the single snapshot it consumed before it can report `READY`.
+
+## USDC/USD policy
+
+The current deterministic policy values canonical Base USDC as exactly 1 USD (`1e8` in the portfolio reference-value scale). This is an explicit unresolved production risk policy, not an oracle observation. A USDC depeg, issuer impairment, or bridge/chain-specific disruption would make the assumption wrong. The existing reference-price abstractions remain able to accept another source later, but this task adds no USDC/USD provider and no silent fallback.
 
 ## Required production setup and unresolved limitations
 

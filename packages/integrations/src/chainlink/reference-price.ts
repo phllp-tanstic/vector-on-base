@@ -1,6 +1,10 @@
 import {
+  APIError,
+  AuthenticationError,
   createClient,
   decodeReport,
+  ReportDecodingError,
+  ValidationError,
   type DataStreamsClient,
   type DecodedV11Report,
 } from "@chainlink/data-streams-sdk";
@@ -21,17 +25,26 @@ export const CHAINLINK_DATA_STREAMS_WEBSOCKET_ENDPOINT = "wss://ws.dataengine.ch
 export type ChainlinkMarketStatus =
   "CLOSED" | "OVERNIGHT" | "POST_MARKET" | "PRE_MARKET" | "REGULAR";
 
+export type ChainlinkSelectedFeedRole = "CLOSED_LAST_VALID" | "EXTENDED" | "OVERNIGHT" | "REGULAR";
+
 export type ChainlinkReferencePriceErrorCode =
-  | "CONFIGURATION_ERROR"
+  | "API_KEY_MISSING"
+  | "AUTHENTICATION_FAILED"
+  | "CREDENTIALS_MISSING"
+  | "FEED_ENTITLEMENT_DENIED"
+  | "FEED_NOT_FOUND"
   | "FUTURE_TIMESTAMP"
-  | "INVALID_REPORT"
-  | "MARKET_STATUS_UNKNOWN"
+  | "MALFORMED_CONFIGURATION"
+  | "MALFORMED_REPORT"
+  | "MARKET_STATUS_UNSUPPORTED"
   | "MISSING_TIMESTAMP"
   | "NON_POSITIVE_PRICE"
   | "PROVIDER_UNAVAILABLE"
+  | "RATE_LIMITED"
   | "SOURCE_ID_MISMATCH"
-  | "STALE_PRICE"
+  | "STALE_REPORT"
   | "UNSUPPORTED_ASSET"
+  | "USER_SECRET_MISSING"
   | "WRONG_QUOTE_CURRENCY";
 
 export class ChainlinkReferencePriceError extends Error {
@@ -71,6 +84,7 @@ export interface ChainlinkDataStreamsReportReader {
 export interface ChainlinkReferencePrice extends AssetPrice {
   readonly marketStatus: ChainlinkMarketStatus;
   readonly quoteCurrency: "USD";
+  readonly selectedFeedRole: ChainlinkSelectedFeedRole;
   readonly sourceIdentifier: `0x${string}`;
 }
 
@@ -92,9 +106,23 @@ function marketStatusName(status: number): ChainlinkMarketStatus {
       return "CLOSED";
     default:
       throw new ChainlinkReferencePriceError(
-        status === 0 ? "MARKET_STATUS_UNKNOWN" : "INVALID_REPORT",
+        "MARKET_STATUS_UNSUPPORTED",
         `Chainlink market status ${status} is not usable.`,
       );
+  }
+}
+
+function selectedFeedRole(status: ChainlinkMarketStatus): ChainlinkSelectedFeedRole {
+  switch (status) {
+    case "PRE_MARKET":
+    case "POST_MARKET":
+      return "EXTENDED";
+    case "REGULAR":
+      return "REGULAR";
+    case "OVERNIGHT":
+      return "OVERNIGHT";
+    case "CLOSED":
+      return "CLOSED_LAST_VALID";
   }
 }
 
@@ -135,7 +163,7 @@ export function validateChainlinkReferenceReport(input: {
     policy.futureToleranceSeconds < 0n
   ) {
     throw new ChainlinkReferencePriceError(
-      "CONFIGURATION_ERROR",
+      "MALFORMED_CONFIGURATION",
       "Reference-price clock and freshness policy must use valid non-negative bounds.",
     );
   }
@@ -153,7 +181,7 @@ export function validateChainlinkReferenceReport(input: {
   }
   if (report.schemaVersion !== source.schemaVersion) {
     throw new ChainlinkReferencePriceError(
-      "INVALID_REPORT",
+      "MALFORMED_REPORT",
       `Expected ${source.schemaVersion}, received ${report.schemaVersion}.`,
     );
   }
@@ -189,7 +217,7 @@ export function validateChainlinkReferenceReport(input: {
     status === "CLOSED" ? policy.closedMaximumAgeSeconds : policy.activeMaximumAgeSeconds;
   if (nowSeconds > observedAt && nowSeconds - observedAt > maximumAge) {
     throw new ChainlinkReferencePriceError(
-      "STALE_PRICE",
+      "STALE_REPORT",
       `Chainlink mid-price is older than the ${maximumAge}-second ${status.toLowerCase()} limit.`,
     );
   }
@@ -208,6 +236,7 @@ export function validateChainlinkReferenceReport(input: {
     ...price,
     marketStatus: status,
     quoteCurrency: source.quoteCurrency,
+    selectedFeedRole: selectedFeedRole(status),
     sourceIdentifier: expectedFeedId,
   });
 }
@@ -218,7 +247,7 @@ function decodedReport(
   const decoded = decodeReport(report.fullReport, report.feedID);
   if (decoded.version !== "V11") {
     throw new ChainlinkReferencePriceError(
-      "INVALID_REPORT",
+      "MALFORMED_REPORT",
       `Expected Chainlink V11 report, received ${decoded.version}.`,
     );
   }
@@ -233,6 +262,100 @@ function decodedReport(
   });
 }
 
+export function classifyChainlinkOperationalError(error: unknown): ChainlinkReferencePriceError {
+  if (error instanceof ChainlinkReferencePriceError) return error;
+  if (error instanceof AuthenticationError) {
+    return new ChainlinkReferencePriceError(
+      "AUTHENTICATION_FAILED",
+      "Chainlink Data Streams authentication failed.",
+    );
+  }
+  if (error instanceof ReportDecodingError || error instanceof ValidationError) {
+    return new ChainlinkReferencePriceError(
+      "MALFORMED_REPORT",
+      "Chainlink Data Streams returned an invalid V11 report.",
+    );
+  }
+  if (error instanceof APIError) {
+    switch (error.statusCode) {
+      case 401:
+        return new ChainlinkReferencePriceError(
+          "AUTHENTICATION_FAILED",
+          "Chainlink Data Streams authentication failed.",
+        );
+      case 403:
+        return new ChainlinkReferencePriceError(
+          "FEED_ENTITLEMENT_DENIED",
+          "Chainlink Data Streams entitlement does not permit this trusted feed.",
+        );
+      case 404:
+        return new ChainlinkReferencePriceError(
+          "FEED_NOT_FOUND",
+          "A trusted Chainlink Data Streams feed was not found.",
+        );
+      case 429:
+        return new ChainlinkReferencePriceError(
+          "RATE_LIMITED",
+          "Chainlink Data Streams rate limit was reached.",
+        );
+    }
+  }
+  return new ChainlinkReferencePriceError(
+    "PROVIDER_UNAVAILABLE",
+    "Chainlink Data Streams report read failed.",
+  );
+}
+
+export interface ChainlinkDataStreamsConfig {
+  readonly apiKey: string;
+  readonly userSecret: string;
+}
+
+function containsWhitespaceOrControl(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0)!;
+    return /\s/u.test(character) || codePoint <= 0x1f || codePoint === 0x7f;
+  });
+}
+
+export function loadChainlinkDataStreamsConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): ChainlinkDataStreamsConfig {
+  const apiKey = environment.CHAINLINK_DATA_STREAMS_API_KEY;
+  const userSecret = environment.CHAINLINK_DATA_STREAMS_USER_SECRET;
+  if (!apiKey?.trim() && !userSecret?.trim()) {
+    throw new ChainlinkReferencePriceError(
+      "CREDENTIALS_MISSING",
+      "Chainlink Data Streams server credentials are not configured.",
+    );
+  }
+  if (!apiKey?.trim()) {
+    throw new ChainlinkReferencePriceError(
+      "API_KEY_MISSING",
+      "CHAINLINK_DATA_STREAMS_API_KEY is required.",
+    );
+  }
+  if (!userSecret?.trim()) {
+    throw new ChainlinkReferencePriceError(
+      "USER_SECRET_MISSING",
+      "CHAINLINK_DATA_STREAMS_USER_SECRET is required.",
+    );
+  }
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(apiKey) ||
+    apiKey !== apiKey.trim() ||
+    userSecret !== userSecret.trim() ||
+    userSecret.length < 16 ||
+    containsWhitespaceOrControl(userSecret)
+  ) {
+    throw new ChainlinkReferencePriceError(
+      "MALFORMED_CONFIGURATION",
+      "Chainlink Data Streams credentials are malformed.",
+    );
+  }
+  return Object.freeze({ apiKey, userSecret });
+}
+
 export function createChainlinkDataStreamsReportReader(config: {
   readonly apiKey: string;
   readonly timeoutMs?: number;
@@ -240,7 +363,7 @@ export function createChainlinkDataStreamsReportReader(config: {
 }): ChainlinkDataStreamsReportReader {
   if (!config.apiKey.trim() || !config.userSecret.trim()) {
     throw new ChainlinkReferencePriceError(
-      "CONFIGURATION_ERROR",
+      "MALFORMED_CONFIGURATION",
       "Chainlink Data Streams API key and user secret are required.",
     );
   }
@@ -257,12 +380,7 @@ export function createChainlinkDataStreamsReportReader(config: {
       try {
         return decodedReport(await client.getLatestReport(feedId));
       } catch (error) {
-        if (error instanceof ChainlinkReferencePriceError) throw error;
-        throw new ChainlinkReferencePriceError(
-          "PROVIDER_UNAVAILABLE",
-          "Chainlink Data Streams report read failed.",
-          { cause: error },
-        );
+        throw classifyChainlinkOperationalError(error);
       }
     },
   });
@@ -287,12 +405,7 @@ export function createChainlinkDataStreamsReferencePriceProvider(input: {
       try {
         routingReport = await input.reader.getLatestReport(source.feedIds.regular);
       } catch (error) {
-        if (error instanceof ChainlinkReferencePriceError) throw error;
-        throw new ChainlinkReferencePriceError(
-          "PROVIDER_UNAVAILABLE",
-          "Chainlink Data Streams routing report read failed.",
-          { cause: error },
-        );
+        throw classifyChainlinkOperationalError(error);
       }
       if (routingReport.feedId.toLowerCase() !== source.feedIds.regular.toLowerCase()) {
         throw new ChainlinkReferencePriceError(
@@ -307,12 +420,7 @@ export function createChainlinkDataStreamsReferencePriceProvider(input: {
         try {
           selectedReport = await input.reader.getLatestReport(source.feedIds[phase]);
         } catch (error) {
-          if (error instanceof ChainlinkReferencePriceError) throw error;
-          throw new ChainlinkReferencePriceError(
-            "PROVIDER_UNAVAILABLE",
-            `Chainlink Data Streams ${phase} report read failed.`,
-            { cause: error },
-          );
+          throw classifyChainlinkOperationalError(error);
         }
       }
       return validateChainlinkReferenceReport({
@@ -332,13 +440,8 @@ export function createConfiguredChainlinkReferencePriceProvider(
   const apiKey = environment.CHAINLINK_DATA_STREAMS_API_KEY?.trim();
   const userSecret = environment.CHAINLINK_DATA_STREAMS_USER_SECRET?.trim();
   if (!apiKey && !userSecret) return undefined;
-  if (!apiKey || !userSecret) {
-    throw new ChainlinkReferencePriceError(
-      "CONFIGURATION_ERROR",
-      "Both CHAINLINK_DATA_STREAMS_API_KEY and CHAINLINK_DATA_STREAMS_USER_SECRET are required.",
-    );
-  }
+  const config = loadChainlinkDataStreamsConfig(environment);
   return createChainlinkDataStreamsReferencePriceProvider({
-    reader: createChainlinkDataStreamsReportReader({ apiKey, userSecret }),
+    reader: createChainlinkDataStreamsReportReader(config),
   });
 }

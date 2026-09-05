@@ -2,8 +2,10 @@ import {
   BASE_MAINNET_ASSET_REGISTRY,
   BASE_MAINNET_TOKENIZED_STOCKS,
   BASE_MAINNET_USDC,
+  findSnapshotPrice,
   ZeroXError,
   type B20AssetVerificationResult,
+  type ChainlinkReferencePriceSnapshot,
   type Erc20Metadata,
   type ZeroXExactSellRequest,
 } from "@vector/integrations";
@@ -69,6 +71,7 @@ export interface MainnetReadinessReport {
   readonly plan?: VectorExecutionPlan;
   readonly quote?: VectorExecutionQuote;
   readonly referencePrice?: AssetPrice;
+  readonly referenceSnapshotId?: Hex;
   readonly riskResult?: RiskValidationResult;
   readonly selectedAsset?: B20VectorAsset;
   readonly smartAccountUsdcBalance?: bigint;
@@ -78,6 +81,7 @@ export interface MainnetReadinessRiskContext {
   readonly candidate: ExecutionCandidate & { readonly executionQuote: VectorExecutionQuote };
   readonly deadline: bigint;
   readonly nonce: bigint;
+  readonly referenceSnapshotId?: Hex;
 }
 
 export interface MainnetReadinessInput {
@@ -98,6 +102,7 @@ export interface MainnetReadinessDependencies {
   getCode(address: EvmAddress): Promise<Hex | undefined>;
   getExecutionQuote(request: ZeroXExactSellRequest): Promise<VectorExecutionQuote>;
   readonly getReferencePrice?: (asset: B20VectorAsset) => Promise<AssetPrice>;
+  readonly getReferencePriceSnapshot?: () => Promise<ChainlinkReferencePriceSnapshot>;
   readExecutorAllowanceTargetApproval(executor: EvmAddress, target: EvmAddress): Promise<boolean>;
   readExecutorAssetSupport(executor: EvmAddress, asset: EvmAddress): Promise<boolean>;
   readExecutorExecutionTargetApproval(executor: EvmAddress, target: EvmAddress): Promise<boolean>;
@@ -561,7 +566,7 @@ export async function checkBaseMainnetExecutionReadiness(
   );
   checks.push(passed("exact-approval", `Exact approval amount is ${quote.quotedRawSellAmount}.`));
 
-  if (!dependencies.getReferencePrice) {
+  if (!dependencies.getReferencePrice && !dependencies.getReferencePriceSnapshot) {
     checks.push(
       failed("reference-price", "No verified production reference-price provider is configured."),
     );
@@ -580,8 +585,17 @@ export async function checkBaseMainnetExecutionReadiness(
   }
 
   let referencePrice: AssetPrice;
+  let referenceSnapshotId: Hex | undefined;
   try {
-    referencePrice = await dependencies.getReferencePrice(selectedAsset);
+    if (dependencies.getReferencePriceSnapshot) {
+      const snapshot = await dependencies.getReferencePriceSnapshot();
+      const snapshotPrice = findSnapshotPrice(snapshot, selectedAsset.symbol);
+      if (!snapshotPrice) throw new Error("Reference snapshot is missing the selected stock.");
+      referencePrice = snapshotPrice;
+      referenceSnapshotId = snapshot.snapshotId;
+    } else {
+      referencePrice = await dependencies.getReferencePrice!(selectedAsset);
+    }
     if (
       referencePrice.asset.tokenAddress.toLowerCase() !==
         selectedAsset.tokenAddress.toLowerCase() ||
@@ -626,6 +640,7 @@ export async function checkBaseMainnetExecutionReadiness(
         executorOwner,
         quote,
         referencePrice,
+        ...(referenceSnapshotId === undefined ? {} : { referenceSnapshotId }),
         selectedAsset,
       },
     );
@@ -643,6 +658,33 @@ export async function checkBaseMainnetExecutionReadiness(
   }
 
   if (
+    referenceSnapshotId !== undefined &&
+    input.riskContext.referenceSnapshotId !== referenceSnapshotId
+  ) {
+    checks.push(
+      failed("risk-snapshot-binding", "Risk context does not bind the captured snapshot ID."),
+    );
+    return report(
+      "CONFIGURATION_ERROR",
+      "Risk context is not bound to the immutable provider snapshot.",
+      checks,
+      {
+        executorAddress: executor,
+        executorOwner,
+        quote,
+        referencePrice,
+        referenceSnapshotId,
+        selectedAsset,
+      },
+    );
+  }
+  if (referenceSnapshotId !== undefined) {
+    checks.push(
+      passed("risk-snapshot-binding", `Risk context binds snapshot ${referenceSnapshotId}.`),
+    );
+  }
+
+  if (
     !candidate.currentBuyAssetReferencePrice ||
     candidate.currentBuyAssetReferencePrice.asset.tokenAddress.toLowerCase() !==
       referencePrice.asset.tokenAddress.toLowerCase() ||
@@ -657,7 +699,14 @@ export async function checkBaseMainnetExecutionReadiness(
       "CONFIGURATION_ERROR",
       "Risk context is not bound to the verified reference-price snapshot.",
       checks,
-      { executorAddress: executor, executorOwner, quote, referencePrice, selectedAsset },
+      {
+        executorAddress: executor,
+        executorOwner,
+        quote,
+        referencePrice,
+        ...(referenceSnapshotId === undefined ? {} : { referenceSnapshotId }),
+        selectedAsset,
+      },
     );
   }
   checks.push(
@@ -697,7 +746,14 @@ export async function checkBaseMainnetExecutionReadiness(
       "CONFIGURATION_ERROR",
       "Risk exposure values are not bound to the verified reference-price snapshot.",
       checks,
-      { executorAddress: executor, executorOwner, quote, referencePrice, selectedAsset },
+      {
+        executorAddress: executor,
+        executorOwner,
+        quote,
+        referencePrice,
+        ...(referenceSnapshotId === undefined ? {} : { referenceSnapshotId }),
+        selectedAsset,
+      },
     );
   }
   checks.push(
@@ -724,6 +780,7 @@ export async function checkBaseMainnetExecutionReadiness(
         executorOwner,
         quote,
         referencePrice,
+        ...(referenceSnapshotId === undefined ? {} : { referenceSnapshotId }),
         riskResult,
         selectedAsset,
       },
@@ -766,6 +823,8 @@ export async function checkBaseMainnetExecutionReadiness(
         executorOwner,
         plan,
         quote,
+        referencePrice,
+        ...(referenceSnapshotId === undefined ? {} : { referenceSnapshotId }),
         riskResult,
         selectedAsset,
         ...(smartAccountUsdcBalance === undefined ? {} : { smartAccountUsdcBalance }),
@@ -786,6 +845,8 @@ export async function checkBaseMainnetExecutionReadiness(
         executorAddress: executor,
         executorOwner,
         quote,
+        referencePrice,
+        ...(referenceSnapshotId === undefined ? {} : { referenceSnapshotId }),
         riskResult,
         selectedAsset,
       },

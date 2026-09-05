@@ -66,6 +66,11 @@ Chainlink Data Streams reference read. It imports no wallet, signer, Coinbase au
 contract-write, or UserOperation submission capability. Automated tests scan the command for those
 prohibited capabilities. It exits non-zero for every state other than `READY`.
 
+Chainlink access can be checked independently with `npm run verify:reference-prices`. That command
+captures all four trusted stocks once, emits a deterministic snapshot ID and constituent timestamps,
+and optionally constructs a read-only provider-backed portfolio/risk projection for
+`VECTOR_MAINNET_SMART_ACCOUNT`. Missing credentials stop with a typed configuration code.
+
 ## States
 
 - `READY`: all reads passed, independent risk validation accepted the exact candidate, and the
@@ -113,7 +118,8 @@ unsupported Base token, or an untyped quote error.
 - that recognized AllowanceHolder is already approved in both semantic mappings on the deployed
   executor;
 - a verified reference-price/portfolio context binds the same quote and Smart Account; trigger and
-  exposure values bind to that provider snapshot and B20 economic amount; and risk accepts it;
+  exposure values bind to the same immutable provider snapshot ID and B20 economic amount; and risk
+  accepts it;
 - the production builder creates exactly `approve(executor, quotedSellAmount)` followed by
   `executor.execute(intent)` with its bounded nonce and deadline.
 

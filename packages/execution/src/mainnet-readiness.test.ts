@@ -5,8 +5,12 @@ import { describe, it } from "node:test";
 import {
   BASE_MAINNET_TOKENIZED_STOCKS,
   BASE_MAINNET_USDC,
+  captureChainlinkReferencePriceSnapshot,
+  getChainlinkReferenceSource,
+  validateChainlinkReferenceReport,
   ZeroXError,
   type B20AssetVerificationResult,
+  type ChainlinkDataStreamsReferencePriceProvider,
 } from "@vector/integrations";
 import { createAssetPrice } from "@vector/portfolio";
 
@@ -94,6 +98,72 @@ describe("Base Mainnet execution readiness", () => {
     );
     assert.equal(
       result.checks.find((check) => check.name === "executor-allowlist-compatibility")?.status,
+      "PASSED",
+    );
+  });
+
+  it("consumes one coherent provider snapshot and binds its ID to readiness risk", async () => {
+    const { candidate, dependencies, input } = createFixture();
+    const provider: ChainlinkDataStreamsReferencePriceProvider = {
+      async getPrice(asset) {
+        const source = getChainlinkReferenceSource(asset.symbol);
+        assert.ok(source);
+        return validateChainlinkReferenceReport({
+          asset,
+          nowSeconds: input.nowSeconds,
+          report: {
+            feedId: source.feedIds.regular,
+            lastSeenTimestampNs: input.nowSeconds * 1_000_000_000n,
+            marketStatus: 2,
+            mid: 100n * 10n ** 18n,
+            quoteCurrency: "USD",
+            schemaVersion: "V11",
+          },
+          source,
+        });
+      },
+    };
+    const snapshot = await captureChainlinkReferencePriceSnapshot({
+      nowSeconds: () => input.nowSeconds,
+      provider,
+    });
+    const selectedPrice = snapshot.prices[0]!;
+    let snapshotReads = 0;
+    const { getReferencePrice: _legacyReferencePrice, ...snapshotDependencies } = dependencies;
+    void _legacyReferencePrice;
+    const result = await checkBaseMainnetExecutionReadiness(
+      {
+        ...input,
+        riskContext: {
+          ...input.riskContext,
+          candidate: {
+            ...candidate,
+            currentBuyAssetReferencePrice: {
+              asset: selectedPrice.asset,
+              kind: "REFERENCE_PRICE",
+              price: selectedPrice.price,
+              priceDecimals: selectedPrice.priceDecimals,
+              source: selectedPrice.source,
+            },
+          },
+          referenceSnapshotId: snapshot.snapshotId,
+        },
+      },
+      {
+        ...snapshotDependencies,
+        getReferencePriceSnapshot: async () => {
+          snapshotReads += 1;
+          return snapshot;
+        },
+      },
+    );
+
+    assert.equal(result.state, "READY");
+    assert.equal(snapshotReads, 1);
+    assert.equal(result.referenceSnapshotId, snapshot.snapshotId);
+    assert.equal(result.referencePrice, selectedPrice);
+    assert.equal(
+      result.checks.find((check) => check.name === "risk-snapshot-binding")?.status,
       "PASSED",
     );
   });
