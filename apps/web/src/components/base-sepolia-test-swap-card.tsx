@@ -26,6 +26,7 @@ import {
   type ThesisStatus,
 } from "../lib/executable-thesis";
 import type { ThesisExecutionRecord } from "../lib/persisted-thesis";
+import { CopyableValue } from "./copyable-value";
 
 const publicClient = createPublicClient({
   chain: baseSepolia,
@@ -155,12 +156,16 @@ export function BaseSepoliaTestSwapCard({
     setBalancesRefreshedFor(undefined);
     setHasSubmittedPlan(false);
     setConfirmedAt(undefined);
-    const prepared = prepareBaseSepoliaTestSwap({
-      explicitUserAction: true,
-      smartAccountAddress,
-      chainId: BASE_SEPOLIA_CHAIN_ID,
-    });
-    if (prepared) setPlan(prepared);
+    try {
+      const prepared = prepareBaseSepoliaTestSwap({
+        explicitUserAction: true,
+        smartAccountAddress,
+        chainId: BASE_SEPOLIA_CHAIN_ID,
+      });
+      if (prepared) setPlan(prepared);
+    } catch (error) {
+      setLocalError(testSwapErrorMessage(error));
+    }
   }
 
   async function authorizeAndExecute() {
@@ -224,6 +229,15 @@ export function BaseSepoliaTestSwapCard({
     transactionHash,
     userOperationHash,
   });
+  const progressLabel = receiptSucceeded
+    ? "Confirmed"
+    : userOperationHash
+      ? "Waiting for Base confirmation…"
+      : isSubmitting || sendStatus === "pending"
+        ? "Submitting UserOperation…"
+        : plan
+          ? "Ready for authorization"
+          : "Prepare execution to review the exact calls";
 
   useEffect(() => {
     if (!confirmedReceipt || !smartAccountAddress || !onConfirmedExecution) return;
@@ -259,11 +273,15 @@ export function BaseSepoliaTestSwapCard({
       <div className="balance-grid" aria-label="Smart Account fixture token balances">
         <div>
           <span>mUSDC balance</span>
-          <strong>{balances ? formatUnits(balances.sell, 6) : "—"}</strong>
+          <strong>
+            {balances ? formatUnits(balances.sell, 6) : isRefreshing ? "Reading…" : "—"}
+          </strong>
         </div>
         <div>
           <span>NOTB20 balance</span>
-          <strong>{balances ? formatUnits(balances.buy, 8) : "—"}</strong>
+          <strong>
+            {balances ? formatUnits(balances.buy, 8) : isRefreshing ? "Reading…" : "—"}
+          </strong>
         </div>
       </div>
       <button
@@ -274,7 +292,11 @@ export function BaseSepoliaTestSwapCard({
       >
         {isRefreshing ? "Refreshing balances…" : "Refresh balances"}
       </button>
-      {balanceError && <p className="error">{balanceError}</p>}
+      {balanceError && (
+        <p className="error" role="alert">
+          {balanceError}
+        </p>
+      )}
 
       <button
         type="button"
@@ -286,73 +308,130 @@ export function BaseSepoliaTestSwapCard({
 
       {plan && (
         <div className="confirmation" aria-label="Test swap confirmation">
-          <h3>Exact execution package</h3>
-          <dl>
-            <dt>Sell</dt>
-            <dd>1 mUSDC (1,000,000 base units)</dd>
-            <dt>Minimum receive</dt>
-            <dd>1 NOTB20 (100,000,000 base units)</dd>
-            <dt>Owner / recipient</dt>
-            <dd>{plan.intent.owner}</dd>
-            <dt>VectorExecutor</dt>
-            <dd>{BASE_SEPOLIA_TEST_FIXTURES.executor}</dd>
-            <dt>mUSDC</dt>
-            <dd>{BASE_SEPOLIA_TEST_FIXTURES.mockUsdc}</dd>
-            <dt>NOTB20</dt>
-            <dd>{BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken}</dd>
-            <dt>Execution / allowance target</dt>
-            <dd>{BASE_SEPOLIA_TEST_FIXTURES.router}</dd>
-            <dt>Native call value</dt>
-            <dd>0</dd>
-            <dt>Network</dt>
-            <dd>Base Sepolia (84532)</dd>
-            <dt>Authorization source</dt>
-            <dd>Coinbase user-controlled Smart Account</dd>
-            <dt>Nonce</dt>
-            <dd>{plan.intent.nonce.toString()}</dd>
-            <dt>Deadline</dt>
-            <dd>
-              {formatDeadline(plan.intent.deadline)} ({plan.intent.deadline.toString()})
-            </dd>
-            <dt>Time remaining</dt>
-            <dd>
-              {plan.intent.deadline > nowSeconds
-                ? `${(plan.intent.deadline - nowSeconds).toString()} seconds`
-                : "Expired"}
-            </dd>
-          </dl>
+          <div className="authorization-summary">
+            <div>
+              <span>Sell amount</span>
+              <strong>1 mUSDC</strong>
+            </div>
+            <div>
+              <span>Asset</span>
+              <strong>NOTB20 test settlement</strong>
+            </div>
+            <div>
+              <span>Minimum receive</span>
+              <strong>1 NOTB20</strong>
+            </div>
+            <div>
+              <span>Network</span>
+              <strong>Base Sepolia</strong>
+            </div>
+            <div>
+              <span>Deadline</span>
+              <strong>{formatDeadline(plan.intent.deadline)}</strong>
+            </div>
+          </div>
+          <div className="call-count">
+            <strong>2 onchain calls</strong>
+            <span>Both require your explicit authorization</span>
+          </div>
           <ol className="call-sequence">
             <li>
-              <strong>Call 1 · Exact approval</strong>
-              <br />
-              mUSDC.approve(VectorExecutor, 1,000,000)
+              <strong>Exact approval</strong>
+              <span>Approve exactly 1 mUSDC to VectorExecutor</span>
             </li>
             <li>
-              <strong>Call 2 · Deterministic execution</strong>
-              <br />
-              VectorExecutor.execute(intent), which calls router.executeSwap(VectorExecutor,
-              VectorExecutor, 1,000,000)
+              <strong>Vector execution</strong>
+              <span>Execute the reviewed testnet settlement</span>
             </li>
           </ol>
-          {expired && <p className="error">This plan expired. Prepare a fresh test swap.</p>}
+          <details className="technical-details">
+            <summary>Technical details</summary>
+            <dl>
+              <dt>Sell amount</dt>
+              <dd>1 mUSDC (1,000,000 base units)</dd>
+              <dt>Minimum receive</dt>
+              <dd>1 NOTB20 (100,000,000 base units)</dd>
+              <dt>Owner / recipient</dt>
+              <dd>
+                <CopyableValue label="owner address" value={plan.intent.owner} />
+              </dd>
+              <dt>VectorExecutor</dt>
+              <dd>
+                <CopyableValue
+                  label="VectorExecutor address"
+                  value={BASE_SEPOLIA_TEST_FIXTURES.executor}
+                />
+              </dd>
+              <dt>mUSDC</dt>
+              <dd>
+                <CopyableValue label="mUSDC address" value={BASE_SEPOLIA_TEST_FIXTURES.mockUsdc} />
+              </dd>
+              <dt>NOTB20</dt>
+              <dd>
+                <CopyableValue
+                  label="NOTB20 address"
+                  value={BASE_SEPOLIA_TEST_FIXTURES.mockB20LikeToken}
+                />
+              </dd>
+              <dt>Reviewed test router</dt>
+              <dd>
+                <CopyableValue label="router address" value={BASE_SEPOLIA_TEST_FIXTURES.router} />
+              </dd>
+              <dt>Native call value</dt>
+              <dd>0</dd>
+              <dt>Network</dt>
+              <dd>Base Sepolia (84532)</dd>
+              <dt>Authorization source</dt>
+              <dd>Coinbase user-controlled Smart Account</dd>
+              <dt>Nonce</dt>
+              <dd>{plan.intent.nonce.toString()}</dd>
+              <dt>Deadline</dt>
+              <dd>
+                {formatDeadline(plan.intent.deadline)} ({plan.intent.deadline.toString()})
+              </dd>
+              <dt>Time remaining</dt>
+              <dd>
+                {plan.intent.deadline > nowSeconds
+                  ? `${(plan.intent.deadline - nowSeconds).toString()} seconds`
+                  : "Expired"}
+              </dd>
+            </dl>
+          </details>
+          {expired && (
+            <p className="error" role="alert">
+              This prepared execution expired. Prepare a fresh execution before authorizing.
+            </p>
+          )}
           {insufficient && (
-            <p className="error">At least 1 mUSDC is required in the Smart Account.</p>
+            <p className="error" role="alert">
+              At least 1 mUSDC is required. Follow the manual testnet setup in docs/BASE_SEPOLIA.md,
+              then refresh balances. Vector will not mint or submit automatically.
+            </p>
           )}
           <button type="button" onClick={() => void authorizeAndExecute()} disabled={!canSubmit}>
-            {isPending ? "Authorization or execution pending…" : "Authorize and execute"}
+            {isSubmitting
+              ? "Submitting UserOperation…"
+              : userOperationHash && !receiptSucceeded
+                ? "Waiting for Base confirmation…"
+                : receiptSucceeded
+                  ? "Executed"
+                  : "Authorize 2 calls"}
           </button>
         </div>
       )}
 
-      <p className="status">UserOperation status: {displayedStatus}</p>
+      <p className="execution-progress" role="status" aria-live="polite">
+        <span aria-hidden="true" className={`progress-dot ${displayedStatus}`} />
+        {progressLabel}
+      </p>
       {userOperationHash && (
         <p className="hash-line">
-          UserOperation: <code>{userOperationHash}</code>
+          UserOperation: <CopyableValue label="UserOperation hash" value={userOperationHash} />
         </p>
       )}
       {transactionHash && (
         <p className="hash-line">
-          Transaction: <code>{transactionHash}</code>{" "}
+          Transaction: <CopyableValue label="transaction hash" value={transactionHash} />{" "}
           <a
             href={`${BASE_SEPOLIA_EXPLORER}/tx/${transactionHash}`}
             target="_blank"
@@ -382,11 +461,23 @@ export function BaseSepoliaTestSwapCard({
               <dt>Received amount</dt>
               <dd>{formatUnits(confirmedReceipt.receivedRawBuyAmount, 8)} NOTB20</dd>
               <dt>Smart Account</dt>
-              <dd>{smartAccountAddress}</dd>
+              <dd>
+                <CopyableValue label="Smart Account address" value={smartAccountAddress ?? ""} />
+              </dd>
               <dt>VectorExecutor</dt>
-              <dd>{BASE_SEPOLIA_TEST_FIXTURES.executor}</dd>
+              <dd>
+                <CopyableValue
+                  label="VectorExecutor address"
+                  value={BASE_SEPOLIA_TEST_FIXTURES.executor}
+                />
+              </dd>
               <dt>UserOperation hash</dt>
-              <dd>{confirmedReceipt.userOperationHash}</dd>
+              <dd>
+                <CopyableValue
+                  label="UserOperation hash"
+                  value={confirmedReceipt.userOperationHash}
+                />
+              </dd>
               <dt>Transaction hash</dt>
               <dd>
                 <a
@@ -394,7 +485,7 @@ export function BaseSepoliaTestSwapCard({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {confirmedReceipt.transactionHash}
+                  View transaction on BaseScan
                 </a>
               </dd>
               <dt>Network</dt>
@@ -419,7 +510,7 @@ export function BaseSepoliaTestSwapCard({
           </p>
         ))}
       {(localError || relevantSendError || receiptError) && (
-        <p className="error">
+        <p className="error" role="alert">
           {localError ??
             (relevantSendError ? testSwapErrorMessage(relevantSendError) : undefined) ??
             (receiptError ? testSwapErrorMessage(receiptError) : undefined)}

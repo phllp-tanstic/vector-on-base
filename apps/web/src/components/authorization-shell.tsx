@@ -18,6 +18,7 @@ import {
 } from "../lib/authorization";
 import { ExecutableThesisWorkspace } from "./executable-thesis-workspace";
 import { SharedThesisView, useSharedThesis } from "./shared-thesis-view";
+import { CopyableValue } from "./copyable-value";
 
 export function AuthorizationShell() {
   const shared = useSharedThesis();
@@ -33,6 +34,7 @@ export function AuthorizationShell() {
   const [flowId, setFlowId] = useState<string>();
   const [localError, setLocalError] = useState<string>();
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [authState, setAuthState] = useState<string>();
 
   const smartAccount = evmSmartAccounts?.[0];
   const smartAccountAddress = asEvmAddress(smartAccount?.address);
@@ -40,11 +42,14 @@ export function AuthorizationShell() {
   async function startEmailSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLocalError(undefined);
+    setAuthState("Sending one-time code…");
     try {
       const result = await signInWithEmail({ email });
       setFlowId(result.flowId);
     } catch (error) {
       setLocalError(toErrorMessage(error));
+    } finally {
+      setAuthState(undefined);
     }
   }
 
@@ -52,12 +57,15 @@ export function AuthorizationShell() {
     event.preventDefault();
     if (!flowId) return;
     setLocalError(undefined);
+    setAuthState("Verifying code…");
     try {
       await verifyEmailOTP({ flowId, otp });
       setOtp("");
       setFlowId(undefined);
     } catch (error) {
       setLocalError(toErrorMessage(error));
+    } finally {
+      setAuthState(undefined);
     }
   }
 
@@ -78,8 +86,12 @@ export function AuthorizationShell() {
       <div className="stack">
         {shared.payload && <SharedThesisView payload={shared.payload} signedIn={false} />}
         {shared.error && <p className="error shared-link-error">{shared.error}</p>}
-        <div className="card">
+        <div className="card sign-in-card">
+          <p className="eyebrow">User-controlled authorization</p>
           <h2>Sign in</h2>
+          <p className="muted">
+            Use an email code to continue. Vector never receives a wallet signing key.
+          </p>
           {!flowId ? (
             <form onSubmit={startEmailSignIn}>
               <label>
@@ -92,7 +104,9 @@ export function AuthorizationShell() {
                   onChange={(event) => setEmail(event.target.value)}
                 />
               </label>
-              <button type="submit">Send one-time code</button>
+              <button type="submit" disabled={Boolean(authState)}>
+                Send one-time code
+              </button>
             </form>
           ) : (
             <form onSubmit={verifyOtp}>
@@ -107,12 +121,21 @@ export function AuthorizationShell() {
                   onChange={(event) => setOtp(event.target.value)}
                 />
               </label>
-              <button type="submit" disabled={!/^[0-9]{6}$/.test(otp)}>
+              <button type="submit" disabled={!/^[0-9]{6}$/.test(otp) || Boolean(authState)}>
                 Verify and sign in
               </button>
             </form>
           )}
-          {localError && <p className="error">{localError}</p>}
+          {authState && (
+            <p className="status" role="status">
+              {authState}
+            </p>
+          )}
+          {localError && (
+            <p className="error" role="alert">
+              {localError}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -123,7 +146,11 @@ export function AuthorizationShell() {
       <div className="account-bar">
         <div>
           <span>Smart Account</span>
-          <strong>{formatSmartAccountAddress(smartAccountAddress)}</strong>
+          {smartAccountAddress ? (
+            <CopyableValue label="Smart Account address" value={smartAccountAddress} />
+          ) : (
+            <strong>{formatSmartAccountAddress(smartAccountAddress)}</strong>
+          )}
         </div>
         <div>
           <span>Network</span>
@@ -142,7 +169,7 @@ export function AuthorizationShell() {
             Permissions remain disabled.
           </p>
           <button type="button" onClick={createSmartAccount} disabled={isCreatingAccount}>
-            {isCreatingAccount ? "Creating…" : "Create Smart Account"}
+            {isCreatingAccount ? "Creating Smart Account…" : "Create Smart Account"}
           </button>
         </div>
       )}

@@ -24,6 +24,7 @@ import {
   adaptPublicThesis,
   createShareUrl,
   persistedFromWorkingThesis,
+  resetLocalDemoProductState,
   toPublicThesisPayload,
   workingThesisFromPublic,
   type PersistedExecutableThesis,
@@ -31,6 +32,7 @@ import {
   type ThesisExecutionRecord,
 } from "../lib/persisted-thesis";
 import { BaseSepoliaTestSwapCard } from "./base-sepolia-test-swap-card";
+import { CopyableValue } from "./copyable-value";
 import { SharedThesisView } from "./shared-thesis-view";
 
 const RECIPIENT_DEMO_PORTFOLIO = Object.freeze({
@@ -45,6 +47,26 @@ function money(value: number): string {
     minimumFractionDigits: 0,
     style: "currency",
   }).format(value);
+}
+
+function thesisStatusLabel(status: ThesisStatus): string {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((word) => word[0]?.toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function riskReasonLabel(reason: ThesisRiskResult["reasons"][number]): string {
+  const labels: Partial<Record<ThesisRiskResult["reasons"][number], string>> = {
+    EXPOSURE_LIMIT: "Exposure limit reached",
+    INTENT_EXPIRED: "Thesis expired",
+    POLICY_REJECTED: "Invalid risk parameters",
+    RESERVE_ADJUSTMENT: "USDC reserve preserved",
+    SLIPPAGE_TOO_HIGH: "Slippage exceeds maximum",
+    TRIGGER_NOT_MET: "Entry price not reached",
+  };
+  return labels[reason] ?? "Risk policy blocked authorization";
 }
 
 function Field({
@@ -100,15 +122,35 @@ export function ExecutableThesisWorkspace({
   const [savedMessage, setSavedMessage] = useState<string>();
   const [history, setHistory] = useState<readonly ThesisExecutionRecord[]>([]);
   const [isSharedAdapted, setIsSharedAdapted] = useState(false);
+  const [persistenceError, setPersistenceError] = useState<string>();
   const activePortfolio = isSharedAdapted ? RECIPIENT_DEMO_PORTFOLIO : DEMO_PORTFOLIO;
+  const sharedCreatorRisk = useMemo(
+    () => (sharedPayload ? adaptPublicThesis(sharedPayload, DEMO_PORTFOLIO).risk : undefined),
+    [sharedPayload],
+  );
+  const progressIndex = !thesis
+    ? 0
+    : thesis.status === "EXECUTED"
+      ? 4
+      : ["READY_FOR_AUTHORIZATION", "AUTHORIZING", "FAILED"].includes(thesis.status)
+        ? 3
+        : risk
+          ? 2
+          : 1;
 
   useEffect(() => {
-    const thesisRepository = new LocalExecutableThesisRepository(window.localStorage);
-    const records = new LocalThesisExecutionRepository(window.localStorage);
-    setRepository(thesisRepository);
-    setExecutionRepository(records);
-    setSavedTheses(thesisRepository.list());
-    setHistory(records.list());
+    try {
+      const thesisRepository = new LocalExecutableThesisRepository(window.localStorage);
+      const records = new LocalThesisExecutionRepository(window.localStorage);
+      setRepository(thesisRepository);
+      setExecutionRepository(records);
+      setSavedTheses(thesisRepository.list());
+      setHistory(records.list());
+    } catch {
+      setPersistenceError(
+        "Local saving is unavailable in this browser. You can keep working, but this thesis will not persist after the page closes.",
+      );
+    }
   }, []);
   const expiryLocal = useMemo(() => {
     if (!thesis) return "";
@@ -182,7 +224,11 @@ export function ExecutableThesisWorkspace({
   }
 
   async function saveThesis() {
-    if (!thesis || !repository) return;
+    if (!thesis) return;
+    if (!repository) {
+      setSavedMessage("Local saving is unavailable. Your current thesis remains open.");
+      return;
+    }
     try {
       const persisted = await persistedFromWorkingThesis(thesis, smartAccountAddress, savedThesis);
       if (savedThesis) repository.update(savedThesis.id, persisted);
@@ -190,8 +236,8 @@ export function ExecutableThesisWorkspace({
       setSavedThesis(persisted);
       setSavedMessage("Saved · no quote or authorization was created");
       refreshLibrary();
-    } catch (error) {
-      setSavedMessage(error instanceof Error ? error.message : String(error));
+    } catch {
+      setSavedMessage("The thesis could not be saved locally. Your current thesis remains open.");
     }
   }
 
@@ -217,6 +263,28 @@ export function ExecutableThesisWorkspace({
     repository.delete(item.id);
     if (savedThesis?.id === item.id) setSavedThesis(undefined);
     refreshLibrary();
+  }
+
+  function resetDemo(clearSavedTheses = false) {
+    try {
+      resetLocalDemoProductState(window.localStorage, clearSavedTheses);
+      if (clearSavedTheses) setSavedTheses([]);
+    } catch {
+      setPersistenceError(
+        "Local storage could not be changed. The on-screen demo was reset, but saved theses may remain.",
+      );
+    }
+    setSourceText(DEFAULT_DEMO_THESIS);
+    setThesis(undefined);
+    setRisk(undefined);
+    setInterpreterError(undefined);
+    setSavedThesis(undefined);
+    setSavedMessage(
+      clearSavedTheses
+        ? "Demo reset · saved demo theses cleared · confirmed receipts preserved"
+        : "Demo reset · wallet, sign-in, saved theses, and confirmed receipts preserved",
+    );
+    setIsSharedAdapted(false);
   }
 
   async function copyShareLink(item: PersistedExecutableThesis) {
@@ -286,18 +354,25 @@ export function ExecutableThesisWorkspace({
             <h2>Same thesis. Different portfolio. Different safe position.</h2>
             <div className="proof-grid">
               <div>
-                <span>Creator demo result</span>
-                <strong>$320</strong>
+                <span>Shared request</span>
+                <strong>{money(sharedPayload.requestedPositionUsd)}</strong>
               </div>
               <div>
-                <span>Recipient available USDC</span>
-                <strong>$1,180</strong>
+                <span>Creator executable</span>
+                <strong>
+                  {sharedCreatorRisk ? money(sharedCreatorRisk.executableSizeUsd) : "—"}
+                </strong>
               </div>
               <div>
-                <span>Recipient safe position</span>
+                <span>Your executable position</span>
                 <strong>{risk ? money(risk.executableSizeUsd) : "Run risk"}</strong>
               </div>
             </div>
+            <p className="proof-explainer">
+              The shared intent stays at {money(sharedPayload.requestedPositionUsd)}. Deterministic
+              reserve logic recomputes {risk ? money(risk.executableSizeUsd) : "your safe size"}
+              from your Demo Mode portfolio; no creator execution or authorization is inherited.
+            </p>
             <button className="secondary" type="button" onClick={() => void forkShared()}>
               Fork thesis
             </button>
@@ -312,6 +387,11 @@ export function ExecutableThesisWorkspace({
             </div>
             <span className="demo-chip">Local to this browser</span>
           </div>
+          {persistenceError && (
+            <p className="error" role="alert">
+              {persistenceError}
+            </p>
+          )}
           {savedTheses.length === 0 ? (
             <p className="muted">No saved theses yet.</p>
           ) : (
@@ -373,7 +453,7 @@ export function ExecutableThesisWorkspace({
         <div className="flow-steps" aria-label="Workflow progress">
           {["01 Intent", "02 Structure", "03 Risk", "04 Authorize", "05 Receipt"].map(
             (step, index) => (
-              <span className={thesis && index < 2 ? "active" : ""} key={step}>
+              <span className={index <= progressIndex ? "active" : ""} key={step}>
                 {step}
               </span>
             ),
@@ -412,21 +492,35 @@ export function ExecutableThesisWorkspace({
                 <h2>NVDAc conditional entry</h2>
                 <p>{thesis.intent.rationale}</p>
               </div>
-              <span className={`status-pill ${thesis.status.toLowerCase()}`}>{thesis.status}</span>
+              <span className={`status-pill ${thesis.status.toLowerCase()}`}>
+                {thesisStatusLabel(thesis.status)}
+              </span>
             </div>
 
             {savedThesis && (
               <div className="provenance-strip">
+                <span className="provenance-label">Application provenance</span>
                 <strong>
                   {savedThesis.provenance.kind === "ORIGINAL" ? "ORIGINAL THESIS" : "FORKED THESIS"}
                 </strong>
                 {savedThesis.provenance.kind === "FORK" && (
-                  <span>
-                    Forked from {savedThesis.provenance.parentThesisId} · Root thesis{" "}
-                    {savedThesis.provenance.rootThesisId}
-                  </span>
+                  <>
+                    <span>
+                      Forked from{" "}
+                      <CopyableValue
+                        label="parent thesis ID"
+                        value={savedThesis.provenance.parentThesisId}
+                      />
+                    </span>
+                    <span>
+                      Root thesis{" "}
+                      <CopyableValue
+                        label="root thesis ID"
+                        value={savedThesis.provenance.rootThesisId}
+                      />
+                    </span>
+                  </>
                 )}
-                <code>{savedThesis.fingerprint.slice(0, 24)}…</code>
               </div>
             )}
 
@@ -527,18 +621,18 @@ export function ExecutableThesisWorkspace({
               <span className={`risk-state ${risk.state.toLowerCase()}`}>{risk.state}</span>
             </div>
             <div className="adaptation-callout">
-              <div>
-                <span>You asked</span>
+              <div className="requested-amount">
+                <span>Requested</span>
                 <strong>{money(thesis.parameters.requestedSizeUsd)}</strong>
               </div>
               <span className="arrow">→</span>
-              <div>
-                <span>Maximum safe size</span>
+              <div className="adapted-amount">
+                <span>Vector-adapted</span>
                 <strong>{money(risk.executableSizeUsd)}</strong>
               </div>
               <p>
                 {risk.reasons.includes("RESERVE_ADJUSTMENT")
-                  ? "Adjusted to preserve your USDC reserve."
+                  ? `Deterministic portfolio rules computed ${money(risk.executableSizeUsd)} to preserve your ${money(thesis.parameters.reserveUsd)} USDC reserve. AI structured the thesis; it did not choose this amount.`
                   : "No sizing adjustment required."}
               </p>
             </div>
@@ -588,13 +682,20 @@ export function ExecutableThesisWorkspace({
               </div>
             </div>
             {risk.reasons.length > 0 && (
-              <p className="typed-reasons">Policy output: {risk.reasons.join(" · ")}</p>
+              <p className="typed-reasons">
+                Risk result: {risk.reasons.map(riskReasonLabel).join(" · ")}
+              </p>
             )}
-            <button disabled={risk.state === "BLOCKED"} onClick={acceptRisk} type="button">
-              {risk.state === "BLOCKED"
-                ? "Resolve blocked constraints"
-                : "Accept adaptation and continue"}
-            </button>
+            {risk.state === "BLOCKED" ? (
+              <p className="error blocked-guidance" role="alert">
+                Authorization is blocked. Edit the highlighted thesis constraints, then run the risk
+                check again. No execution can be prepared from this result.
+              </p>
+            ) : (
+              <button onClick={acceptRisk} type="button">
+                Accept adaptation and continue
+              </button>
+            )}
           </section>
         )}
 
@@ -624,7 +725,7 @@ export function ExecutableThesisWorkspace({
                 <span>
                   {record.sellAmount} → {record.receiveAmount}
                 </span>
-                <code>{record.transactionHash}</code>
+                <CopyableValue label="transaction hash" value={record.transactionHash} />
               </div>
             ))}
             <p className="field-note">Historical receipts never authorize future execution.</p>
@@ -642,6 +743,29 @@ export function ExecutableThesisWorkspace({
             NVDA is the product-level thesis. Final settlement uses the isolated mUSDC → NOTB20
             testnet fixture.
           </small>
+          <div className="demo-controls">
+            <button className="secondary compact" type="button" onClick={() => resetDemo(false)}>
+              Reset current demo
+            </button>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm("Clear saved demo theses? Confirmed receipts will be preserved.")
+                ) {
+                  resetDemo(true);
+                }
+              }}
+            >
+              Clear saved theses
+            </button>
+          </div>
+          {savedMessage?.startsWith("Demo reset") && (
+            <p className="reset-message" role="status">
+              {savedMessage}
+            </p>
+          )}
         </section>
         <section className="readiness-card">
           <p className="eyebrow">Production path</p>

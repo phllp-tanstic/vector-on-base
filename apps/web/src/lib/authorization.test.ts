@@ -10,6 +10,7 @@ import {
   canTestAuthorization,
   formatSmartAccountAddress,
   readPublicCdpConfig,
+  toErrorMessage,
 } from "./authorization.ts";
 
 const SMART_ACCOUNT = "0x1234567890abcdef1234567890abcdef12345678";
@@ -67,5 +68,11 @@ describe("browser authorization logic", () => {
       network: "base-sepolia",
       calls: [SAFE_AUTHORIZATION_CALL],
     });
+  });
+
+  it("turns authorization failures into actionable messages without leaking internals", () => {
+    assert.match(toErrorMessage(new Error("RPC fetch timeout")), /temporarily unreachable/u);
+    assert.match(toErrorMessage(new Error("User rejected 4001")), /Nothing was submitted/u);
+    assert.doesNotMatch(toErrorMessage(new Error("sensitive internal stack detail")), /sensitive/u);
   });
 });

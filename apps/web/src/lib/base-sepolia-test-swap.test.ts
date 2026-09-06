@@ -205,10 +205,9 @@ describe("Base Sepolia browser test-swap fixture", () => {
       testSwapErrorMessage(new Error("User rejected request (4001)")),
       "Authorization was rejected in the wallet. Nothing was submitted.",
     );
-    assert.equal(
-      testSwapErrorMessage(new Error("simulation reverted")),
-      "Test swap simulation or submission failed: simulation reverted",
-    );
+    assert.match(testSwapErrorMessage(new Error("simulation reverted")), /could not be prepared/u);
+    assert.match(testSwapErrorMessage(new Error("RPC timeout")), /temporarily unreachable/u);
+    assert.doesNotMatch(testSwapErrorMessage(new Error("private internal detail")), /private/u);
   });
 
   it("builds a receipt only from a confirmed onchain result and balance delta", () => {

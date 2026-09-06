@@ -284,5 +284,14 @@ export function testSwapErrorMessage(error: unknown): string {
   if (/reject|denied|4001|ACTION_REJECTED/i.test(message)) {
     return "Authorization was rejected in the wallet. Nothing was submitted.";
   }
-  return `Test swap simulation or submission failed: ${message}`;
+  if (/insufficient|balance|fund/i.test(message)) {
+    return "The Smart Account does not have enough Base Sepolia test assets. Use the manual testnet setup in docs/BASE_SEPOLIA.md, then refresh balances.";
+  }
+  if (/network|fetch|timeout|rpc|503|429/i.test(message)) {
+    return "Base Sepolia is temporarily unreachable. Wait a moment, refresh balances, and prepare a fresh execution. Nothing will execute automatically.";
+  }
+  if (/chain|network/i.test(message)) {
+    return "Wrong network. Switch to Base Sepolia, then prepare a fresh execution.";
+  }
+  return "The test execution could not be prepared or submitted. Review the testnet balance and network, then prepare a fresh execution. Nothing will retry automatically.";
 }

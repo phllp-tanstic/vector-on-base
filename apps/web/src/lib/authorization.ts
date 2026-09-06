@@ -59,5 +59,15 @@ export function canTestAuthorization(
 }
 
 export function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected authorization error.";
+  const message = error instanceof Error ? error.message : String(error);
+  if (/network|fetch|timeout|rpc/i.test(message)) {
+    return "Authorization service is temporarily unreachable. Check your connection and try again; your thesis is unchanged.";
+  }
+  if (/reject|denied|4001|ACTION_REJECTED/i.test(message)) {
+    return "Authorization was cancelled. Nothing was submitted and your thesis is unchanged.";
+  }
+  if (/project|configuration|origin/i.test(message)) {
+    return "Sign-in is not available for this site configuration. Ask the demo operator to verify the CDP project settings.";
+  }
+  return "Authorization could not be completed. Try again; nothing was submitted and your thesis is unchanged.";
 }

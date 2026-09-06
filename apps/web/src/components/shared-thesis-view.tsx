@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { decodeSharePayload, type PublicThesisPayload } from "../lib/persisted-thesis";
+import { CopyableValue } from "./copyable-value";
 
 export function useSharedThesis(): Readonly<{
   payload?: PublicThesisPayload;
@@ -15,7 +16,12 @@ export function useSharedThesis(): Readonly<{
     try {
       setState({ payload: decodeSharePayload(encoded) });
     } catch (error) {
-      setState({ error: error instanceof Error ? error.message : "Malformed shared thesis link." });
+      const message = error instanceof Error ? error.message : "";
+      setState({
+        error: /Unsupported thesis version|Unsupported thesis schema/u.test(message)
+          ? "This shared thesis uses an unsupported version. Ask the creator for a new link. Nothing was imported."
+          : "This shared thesis link is invalid or incomplete. Ask the creator for a new link. Nothing was imported.",
+      });
     }
   }, []);
   return state;
@@ -40,13 +46,18 @@ export function SharedThesisView({
         </div>
         <span className="status-pill">PUBLIC INTENT · NOT AUTHORIZATION</span>
       </div>
-      <p className="shared-warning">
-        This link carries market intent and reusable constraints only. Your portfolio, risk result,
-        execution package, and authorization are computed separately.
-      </p>
+      <div className="shared-warning">
+        <strong>Same thesis. Your own safe position.</strong>
+        <span>
+          The trade is not copied. Vector recomputes risk for the recipient portfolio, and the
+          recipient independently authorizes any execution.
+        </span>
+      </div>
       <dl className="shared-details">
         <dt>Creator</dt>
-        <dd>{payload.creator}</dd>
+        <dd>
+          <CopyableValue label="creator address" value={payload.creator} />
+        </dd>
         <dt>Asset</dt>
         <dd>{payload.asset}</dd>
         <dt>Thesis</dt>
@@ -63,11 +74,21 @@ export function SharedThesisView({
         <dd>{payload.constraints.maxSlippageBps / 100}% maximum</dd>
         <dt>Expiry</dt>
         <dd>{new Date(payload.expiry).toLocaleString()}</dd>
-        <dt>Provenance</dt>
+        <dt>Application provenance</dt>
         <dd>
-          {provenance.kind === "ORIGINAL"
-            ? "ORIGINAL THESIS"
-            : `FORKED THESIS · parent ${provenance.parentThesisId} · root ${provenance.rootThesisId}`}
+          {provenance.kind === "ORIGINAL" ? (
+            "Original thesis"
+          ) : (
+            <span className="provenance-values">
+              <span>
+                Forked from{" "}
+                <CopyableValue label="parent thesis ID" value={provenance.parentThesisId} />
+              </span>
+              <span>
+                Root thesis <CopyableValue label="root thesis ID" value={provenance.rootThesisId} />
+              </span>
+            </span>
+          )}
         </dd>
       </dl>
       {onAdapt ? (

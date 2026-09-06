@@ -532,3 +532,20 @@ export class LocalThesisExecutionRepository {
     );
   }
 }
+
+export interface DemoResetResult {
+  readonly clearedSavedTheses: boolean;
+  readonly preservedExecutionReceipts: true;
+}
+
+/** Clears only Vector's local thesis library. Wallet/auth state and receipts are intentionally out of scope. */
+export function resetLocalDemoProductState(
+  storage: KeyValueStorage,
+  clearSavedTheses: boolean,
+): DemoResetResult {
+  if (clearSavedTheses) storage.removeItem(LocalExecutableThesisRepository.storageKey);
+  return Object.freeze({
+    clearedSavedTheses: clearSavedTheses,
+    preservedExecutionReceipts: true,
+  });
+}

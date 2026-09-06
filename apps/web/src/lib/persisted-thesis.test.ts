@@ -16,6 +16,7 @@ import {
   encodeSharePayload,
   fingerprintPublicThesis,
   persistedFromWorkingThesis,
+  resetLocalDemoProductState,
   toPublicThesisPayload,
   validatePublicThesisPayload,
   workingThesisFromPublic,
@@ -254,5 +255,33 @@ describe("persisted executable theses", () => {
       transactionHash: "0xtx",
     });
     assert.equal(repository.list("t").length, 1);
+  });
+
+  it("resets only explicitly selected local demo state without touching receipts", async () => {
+    const storage = new MemoryStorage();
+    const theses = new LocalExecutableThesisRepository(storage);
+    const receipts = new LocalThesisExecutionRepository(storage);
+    theses.save(await fixture());
+    receipts.saveConfirmed({
+      thesisId: "t",
+      executionId: "e",
+      network: "base-sepolia",
+      status: "CONFIRMED",
+      sellAmount: "1 mUSDC",
+      receiveAmount: "1 NOTB20",
+      executedAt: NOW.toISOString(),
+      smartAccount: CREATOR,
+      userOperationHash: "0xuserop",
+      transactionHash: "0xtx",
+    });
+
+    assert.deepEqual(resetLocalDemoProductState(storage, false), {
+      clearedSavedTheses: false,
+      preservedExecutionReceipts: true,
+    });
+    assert.equal(theses.list().length, 1);
+    resetLocalDemoProductState(storage, true);
+    assert.equal(theses.list().length, 0);
+    assert.equal(receipts.list().length, 1);
   });
 });
