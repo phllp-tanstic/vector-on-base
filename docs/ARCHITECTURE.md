@@ -7,8 +7,8 @@ B20 `balanceOf()` values are canonical raw token amounts used for transfers and 
 Vector derives UI/economic exposure with exact integer arithmetic:
 `floor(rawAmount * multiplier / 1e18)`. The reverse conversion also rounds down.
 
-Future portfolio logic must value the derived UI/economic amount. It must not treat a raw B20
-`balanceOf()` result as an ordinary ERC-20 display balance.
+Portfolio logic values the derived UI/economic amount. It does not treat a raw B20 `balanceOf()`
+result as an ordinary ERC-20 display balance.
 
 ## Portfolio reference valuation
 
@@ -142,11 +142,13 @@ and `useSendUserOperation` requests authorization. The core integration adapter 
 injectable, submission-off by default, and unable to manage a signing key.
 
 The browser proof in `apps/web` pins `@coinbase/cdp-hooks` and its required `@coinbase/cdp-core` peer
-at `0.0.123` (registry latest on 2026-09-04). It sends only an explicit zero-value Base Sepolia test
-call and tracks its receipt with `useWaitForUserOperation`; it does not import the Vector execution
-plan. CDP currently subsidizes Base Sepolia Smart Account UserOperations, while custom paymaster
-configuration remains omitted. Without sponsorship, Base Mainnet requires the Smart Account to
-hold enough ETH for gas.
+at `0.0.123` (registry latest on 2026-09-04). After deterministic demo risk acceptance and a separate
+prepare action, it builds a Base Sepolia fixture plan with the same ordered shape as production:
+an exact mUSDC approval to `VectorExecutor`, followed by `VectorExecutor.execute`. A second explicit
+action requests Coinbase Smart Account authorization, and `useWaitForUserOperation` tracks the
+receipt before the app records success. The fixture is testnet-only and is not a 0x production
+quote. Custom paymaster configuration remains omitted; without sponsorship, Base Mainnet requires
+the Smart Account to hold enough ETH for gas.
 
 Official references:
 

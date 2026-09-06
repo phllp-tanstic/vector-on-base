@@ -7,8 +7,8 @@ by its stated owner after offchain validation.
 ## Authorization and replay protection
 
 V1 selects direct authorization: `ExecutionIntent.owner` must equal `msg.sender`. This works for an
-EOA today and for later Coinbase Smart Account invocation without requiring a second signature.
-There is no relayer, EIP-712 authorization, or Spend Permission in this slice.
+EOA and is proven with a Coinbase Smart Account on Base Sepolia without requiring a second
+signature. There is no relayer, EIP-712 authorization, or Spend Permission in this slice.
 
 For the Coinbase path, the Smart Account address is fixed as both the CDP
 `evmSmartAccount` and `ExecutionIntent.owner`; neither the backend nor the submission adapter accepts
@@ -96,10 +96,11 @@ command after a fresh checkout.
 ## Intentionally offchain or deferred
 
 Portfolio sizing, reserves, exposure, market triggers, reference prices, quote selection, and
-slippage policy remain offchain. The current integration only assembles and validates a Coinbase
-user-controlled Smart Account batch; deployment, live UserOperation submission, real-fund testing,
-Spend Permissions, signed/delegated execution, and developer-controlled server wallets are
-deferred.
+slippage policy remain offchain. The current integration assembles and validates the Coinbase
+user-controlled Smart Account batch, and the browser has submitted that exact two-call shape on
+Base Sepolia with isolated fixtures. Base Mainnet deployment and submission, real-stock execution,
+Spend Permissions, signed/delegated execution, and developer-controlled server wallets remain
+outside V1.
 
 CDP user-wallet authentication and signing belong in the browser under the authenticated user's
 session (`@coinbase/cdp-hooks` or its lower-level frontend core). A CDP project identifier is public
@@ -113,9 +114,10 @@ authorization mechanism.
 The Base Sepolia browser proof may contain only the public CDP project identifier, authenticated
 end-user session state, the user's Smart Account address, and public network/contract addresses.
 It must never contain a CDP API secret, Wallet Secret, developer-wallet secret, deployer private
-key, or Vector backend signing key. There is no Vector backend signing key in V1. The user must
-click **Test Authorization** before the browser requests a harmless UserOperation; page load never
-submits one, and the proof is not wired to `VectorExecutionPlan` or `VectorExecutor.execute`.
+key, or Vector backend signing key. There is no Vector backend signing key in V1. Page load never
+prepares or submits an operation. The user must first select **Prepare execution**, review the exact
+fixture amounts and two calls, and then separately select **Authorize 2 calls** before the browser
+requests Coinbase Smart Account authorization for `approve` plus `VectorExecutor.execute`.
 
 ## Local end-to-end harness
 

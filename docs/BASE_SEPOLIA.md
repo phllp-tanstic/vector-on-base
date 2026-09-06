@@ -1,8 +1,8 @@
 # Base Sepolia authorization and execution fixtures
 
 This document covers the existing Base Sepolia `VectorExecutor`, isolated testnet-only execution
-fixtures, and the existing minimal browser authorization proof. The fixture contracts are not real
-USDC, B20 assets, or a production router. They must never be added to
+fixtures, and the browser's confirmed two-call authorization and settlement proof. The fixture
+contracts are not real USDC, B20 assets, or a production router. They must never be added to
 `BASE_MAINNET_ASSET_REGISTRY` or used by Base Mainnet configuration.
 
 ## Browser setup
@@ -23,14 +23,15 @@ explicitly create one; `enableSpendPermissions` is always false.
 4. Run `npm run dev --workspace apps/web` and open `http://localhost:3000`.
 5. Enter your email, then the six-digit OTP sent by CDP.
 6. Confirm the page shows the user-controlled Smart Account and `Base Sepolia (84532)`.
-7. Click **Test Authorization** and approve the request. Nothing is submitted on page load.
-8. Wait for the UserOperation status, userOp hash, transaction hash, and BaseScan link.
+7. Complete the deterministic thesis and risk flow, then click **Prepare execution**. Nothing is
+   submitted on page load or preparation.
+8. Review the exact fixture amounts, contracts, nonce, deadline, and two calls.
+9. Click **Authorize 2 calls**, approve the Coinbase Smart Account request, and wait for the
+   UserOperation receipt, transaction hash, balance refresh, and BaseScan link.
 
-The test contains one documented harmless call to `0x0000000000000000000000000000000000000000`
-with `value = 0` and empty calldata. It transfers no funds and never calls `VectorExecutor`. Base
-Sepolia Smart Account UserOperations are currently subsidized by CDP, so no custom paymaster URL or
-faucet funding is required for this proof. Custom sponsorship remains unconfigured. CDP Smart
-Accounts continue to support ordered multi-call batching, although this safety proof sends one call.
+The live proof is the ordered two-call fixture settlement described below. Custom sponsorship
+remains unconfigured; authorization and any applicable Sepolia gas sponsorship are distinct
+concerns.
 
 `NEXT_PUBLIC_CDP_PROJECT_ID` and onchain addresses are public configuration. CDP API secrets, Wallet
 Secrets, developer wallet credentials, deployer private keys, and any backend signing credentials
@@ -38,9 +39,9 @@ must never enter `apps/web`, `.env.local`, or another `NEXT_PUBLIC_*` value.
 
 ## Browser test-swap workflow
 
-The browser also exposes a separate **Explicit test swap** card. Unlike **Test Authorization**, this
-workflow moves fixture tokens. It never constructs a plan on page load and never submits merely
-because a plan exists.
+After thesis risk acceptance, the browser exposes an **Execution preview** for the explicit test
+settlement. This workflow moves fixture tokens. It never constructs a plan on page load and never
+submits merely because a plan exists.
 
 The card reads the authenticated Smart Account's mUSDC and NOTB20 balances from the public
 `https://sepolia.base.org` endpoint. This URL has no credentials and no RPC secret is exposed in a
@@ -48,11 +49,11 @@ The card reads the authenticated Smart Account's mUSDC and NOTB20 balances from 
 
 1. Confirm that the displayed Smart Account is the intended fixture-funded account and that its
    mUSDC balance is at least `1`.
-2. Click **Prepare test swap**. This user action creates a cryptographically random nonce and a
+2. Click **Prepare execution**. This user action creates a cryptographically random nonce and a
    visible deadline five minutes in the future. It does not contact the wallet or submit anything.
 3. Review the exact amounts, owner/recipient, four contracts, zero native value, nonce, deadline,
    and ordered two-call sequence shown on screen.
-4. Click the separate **Authorize and execute** button and approve the CDP Smart Account request.
+4. Click the separate **Authorize 2 calls** button and approve the CDP Smart Account request.
 5. Wait while duplicate submission is disabled. A wallet rejection or simulation/submission error
    is shown as a failure and never as success.
 6. Success appears only after the UserOperation receipt succeeds. The card then shows the userOp
@@ -82,6 +83,25 @@ These addresses are compiled into the Base Sepolia-only browser fixture module:
 They are testnet fixtures, not production assets. They are deliberately absent from
 `BASE_MAINNET_ASSET_REGISTRY`, and the production execution builder remains restricted to Base
 Mainnet (`8453`).
+
+## Confirmed execution evidence
+
+The following successful Base Sepolia receipt was read back from the public RPC and records the
+Coinbase Smart Account's exact approval and execution batch:
+
+- VectorExecutor:
+  [`0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE`](https://sepolia.basescan.org/address/0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE)
+- UserOperation:
+  `0x586d7c51d1768c18b4fe742d91a38eede645ed388bb43645c54d3a67a1eaa1cb`
+- Transaction:
+  [`0xb68a0b23e4582471ce9a7a862a3e2db9aa41d0b7953d18ceb48427e0b717607d`](https://sepolia.basescan.org/tx/0xb68a0b23e4582471ce9a7a862a3e2db9aa41d0b7953d18ceb48427e0b717607d)
+- Receipt: success at block `46,409,263`
+
+The logs show `1,000,000` raw mUSDC approved to and pulled by `VectorExecutor`, a temporary exact
+router allowance that returns to zero, `100,000,000` raw NOTB20 delivered through the executor to
+the Smart Account recipient, and the matching `IntentExecuted` and UserOperation events.
+
+**BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS.**
 
 ## Existing VectorExecutor
 
