@@ -17,8 +17,10 @@ import {
   toErrorMessage,
 } from "../lib/authorization";
 import { ExecutableThesisWorkspace } from "./executable-thesis-workspace";
+import { SharedThesisView, useSharedThesis } from "./shared-thesis-view";
 
 export function AuthorizationShell() {
+  const shared = useSharedThesis();
   const { currentUser } = useCurrentUser();
   const { evmSmartAccounts } = useEvmSmartAccounts();
   const { signInWithEmail } = useSignInWithEmail();
@@ -74,6 +76,8 @@ export function AuthorizationShell() {
   if (!currentUser) {
     return (
       <div className="stack">
+        {shared.payload && <SharedThesisView payload={shared.payload} signedIn={false} />}
+        {shared.error && <p className="error shared-link-error">{shared.error}</p>}
         <div className="card">
           <h2>Sign in</h2>
           {!flowId ? (
@@ -143,7 +147,13 @@ export function AuthorizationShell() {
         </div>
       )}
 
-      {smartAccount && <ExecutableThesisWorkspace smartAccount={smartAccount} />}
+      {shared.error && <p className="error shared-link-error">{shared.error}</p>}
+      {smartAccount && (
+        <ExecutableThesisWorkspace
+          smartAccount={smartAccount}
+          {...(shared.payload ? { sharedPayload: shared.payload } : {})}
+        />
+      )}
     </div>
   );
 }

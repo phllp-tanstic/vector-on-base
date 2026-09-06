@@ -1,7 +1,7 @@
 "use client";
 
 import type { EndUserEvmSmartAccount } from "@coinbase/cdp-core";
-import { type ChangeEvent, useCallback, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   DEFAULT_DEMO_THESIS,
@@ -17,7 +17,26 @@ import {
   type ThesisRiskResult,
   type ThesisStatus,
 } from "../lib/executable-thesis";
+import { asEvmAddress } from "../lib/authorization";
+import {
+  LocalExecutableThesisRepository,
+  LocalThesisExecutionRepository,
+  adaptPublicThesis,
+  createShareUrl,
+  persistedFromWorkingThesis,
+  toPublicThesisPayload,
+  workingThesisFromPublic,
+  type PersistedExecutableThesis,
+  type PublicThesisPayload,
+  type ThesisExecutionRecord,
+} from "../lib/persisted-thesis";
 import { BaseSepoliaTestSwapCard } from "./base-sepolia-test-swap-card";
+import { SharedThesisView } from "./shared-thesis-view";
+
+const RECIPIENT_DEMO_PORTFOLIO = Object.freeze({
+  ...DEMO_PORTFOLIO,
+  availableUsdcUsd: 1_180,
+});
 
 function money(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -64,11 +83,33 @@ function Field({
 
 export function ExecutableThesisWorkspace({
   smartAccount,
-}: Readonly<{ smartAccount: EndUserEvmSmartAccount }>) {
+  sharedPayload,
+}: Readonly<{
+  smartAccount: EndUserEvmSmartAccount;
+  sharedPayload?: PublicThesisPayload;
+}>) {
+  const smartAccountAddress = asEvmAddress(smartAccount.address) ?? "unknown-smart-account";
   const [sourceText, setSourceText] = useState(DEFAULT_DEMO_THESIS);
   const [thesis, setThesis] = useState<ExecutableThesis>();
   const [risk, setRisk] = useState<ThesisRiskResult>();
   const [interpreterError, setInterpreterError] = useState<string>();
+  const [repository, setRepository] = useState<LocalExecutableThesisRepository>();
+  const [executionRepository, setExecutionRepository] = useState<LocalThesisExecutionRepository>();
+  const [savedTheses, setSavedTheses] = useState<readonly PersistedExecutableThesis[]>([]);
+  const [savedThesis, setSavedThesis] = useState<PersistedExecutableThesis>();
+  const [savedMessage, setSavedMessage] = useState<string>();
+  const [history, setHistory] = useState<readonly ThesisExecutionRecord[]>([]);
+  const [isSharedAdapted, setIsSharedAdapted] = useState(false);
+  const activePortfolio = isSharedAdapted ? RECIPIENT_DEMO_PORTFOLIO : DEMO_PORTFOLIO;
+
+  useEffect(() => {
+    const thesisRepository = new LocalExecutableThesisRepository(window.localStorage);
+    const records = new LocalThesisExecutionRepository(window.localStorage);
+    setRepository(thesisRepository);
+    setExecutionRepository(records);
+    setSavedTheses(thesisRepository.list());
+    setHistory(records.list());
+  }, []);
   const expiryLocal = useMemo(() => {
     if (!thesis) return "";
     const date = new Date(thesis.parameters.expiryIso);
@@ -84,6 +125,8 @@ export function ExecutableThesisWorkspace({
     try {
       setThesis(interpretDemoThesis(sourceText));
       setRisk(undefined);
+      setSavedThesis(undefined);
+      setSavedMessage(undefined);
     } catch (error) {
       setInterpreterError(error instanceof Error ? error.message : String(error));
     }
@@ -93,6 +136,9 @@ export function ExecutableThesisWorkspace({
     if (!thesis) return;
     setThesis(editThesisParameters(thesis, { [name]: Number(value) }));
     setRisk(undefined);
+    setSavedMessage(
+      savedThesis ? "Unsaved changes · execution preparation invalidated" : undefined,
+    );
   }
 
   function editExpiry(event: ChangeEvent<HTMLInputElement>) {
@@ -102,11 +148,14 @@ export function ExecutableThesisWorkspace({
       editThesisParameters(thesis, { expiryIso: new Date(event.target.value).toISOString() }),
     );
     setRisk(undefined);
+    setSavedMessage(
+      savedThesis ? "Unsaved changes · execution preparation invalidated" : undefined,
+    );
   }
 
   function runRiskCheck() {
     if (!thesis) return;
-    const result = evaluateThesisRisk(thesis, DEMO_PORTFOLIO);
+    const result = evaluateThesisRisk(thesis, activePortfolio);
     setRisk(result);
     setThesis({
       ...thesis,
@@ -126,9 +175,201 @@ export function ExecutableThesisWorkspace({
     setThesis(acceptRiskResult(thesis, risk));
   }
 
+  function refreshLibrary() {
+    if (!repository) return;
+    setSavedTheses(repository.list());
+    setHistory(executionRepository?.list() ?? []);
+  }
+
+  async function saveThesis() {
+    if (!thesis || !repository) return;
+    try {
+      const persisted = await persistedFromWorkingThesis(thesis, smartAccountAddress, savedThesis);
+      if (savedThesis) repository.update(savedThesis.id, persisted);
+      else repository.save(persisted);
+      setSavedThesis(persisted);
+      setSavedMessage("Saved · no quote or authorization was created");
+      refreshLibrary();
+    } catch (error) {
+      setSavedMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function openSaved(item: PersistedExecutableThesis) {
+    const working = workingThesisFromPublic(toPublicThesisPayload(item), item.id);
+    setThesis(working);
+    setSourceText(working.intent.sourceText);
+    setRisk(undefined);
+    setSavedThesis(item);
+    setSavedMessage("Saved thesis opened · run a fresh risk check before preparation");
+  }
+
+  async function forkSaved(item: PersistedExecutableThesis) {
+    if (!repository) return;
+    const fork = await repository.fork(item, smartAccountAddress);
+    openSaved(fork);
+    refreshLibrary();
+    setSavedMessage("Fork saved with a new identity · execution state was not inherited");
+  }
+
+  function deleteSaved(item: PersistedExecutableThesis) {
+    if (!repository) return;
+    repository.delete(item.id);
+    if (savedThesis?.id === item.id) setSavedThesis(undefined);
+    refreshLibrary();
+  }
+
+  async function copyShareLink(item: PersistedExecutableThesis) {
+    try {
+      await navigator.clipboard.writeText(createShareUrl(item, window.location.origin));
+      setSavedMessage("Share link copied · it contains reusable intent, not execution authority");
+    } catch {
+      setSavedMessage("Could not copy the share link in this browser.");
+    }
+  }
+
+  function adaptShared() {
+    if (!sharedPayload) return;
+    const adapted = adaptPublicThesis(sharedPayload, RECIPIENT_DEMO_PORTFOLIO);
+    setThesis(adapted.thesis);
+    setSourceText(adapted.thesis.intent.sourceText);
+    setRisk(adapted.risk);
+    setSavedThesis(undefined);
+    setIsSharedAdapted(true);
+    setSavedMessage("Recipient risk recomputed from the recipient demo portfolio");
+  }
+
+  async function forkShared() {
+    if (!sharedPayload || !repository) return;
+    const working = workingThesisFromPublic(sharedPayload);
+    const parentBase = await persistedFromWorkingThesis(working, sharedPayload.creator);
+    const parent = {
+      ...parentBase,
+      id: sharedPayload.thesisId,
+      provenance: sharedPayload.provenance,
+    };
+    const fork = await repository.fork(parent, smartAccountAddress);
+    openSaved(fork);
+    refreshLibrary();
+    setIsSharedAdapted(true);
+    setSavedMessage("Fork saved · edit expiry if needed, then run recipient-specific risk");
+  }
+
+  const handleConfirmedExecution = useCallback(
+    (record: Omit<ThesisExecutionRecord, "thesisId">) => {
+      if (!thesis || !executionRepository) return;
+      executionRepository.saveConfirmed({ ...record, thesisId: thesis.id });
+      setHistory(executionRepository.list());
+      if (savedThesis && repository) {
+        const executed = {
+          ...savedThesis,
+          status: "EXECUTED" as const,
+          updatedAt: record.executedAt,
+        };
+        repository.update(savedThesis.id, executed);
+        setSavedThesis(executed);
+        setSavedTheses(repository.list());
+      }
+    },
+    [executionRepository, repository, savedThesis, thesis],
+  );
+
   return (
     <div className="product-grid">
       <section className="workspace-column" aria-label="Executable Thesis workflow">
+        {sharedPayload && !isSharedAdapted && (
+          <SharedThesisView payload={sharedPayload} signedIn onAdapt={adaptShared} />
+        )}
+        {sharedPayload && isSharedAdapted && (
+          <section className="surface adaptation-proof">
+            <p className="eyebrow">Recipient adaptation</p>
+            <h2>Same thesis. Different portfolio. Different safe position.</h2>
+            <div className="proof-grid">
+              <div>
+                <span>Creator demo result</span>
+                <strong>$320</strong>
+              </div>
+              <div>
+                <span>Recipient available USDC</span>
+                <strong>$1,180</strong>
+              </div>
+              <div>
+                <span>Recipient safe position</span>
+                <strong>{risk ? money(risk.executableSizeUsd) : "Run risk"}</strong>
+              </div>
+            </div>
+            <button className="secondary" type="button" onClick={() => void forkShared()}>
+              Fork thesis
+            </button>
+          </section>
+        )}
+
+        <section className="surface thesis-library">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Owned library</p>
+              <h2>My Theses</h2>
+            </div>
+            <span className="demo-chip">Local to this browser</span>
+          </div>
+          {savedTheses.length === 0 ? (
+            <p className="muted">No saved theses yet.</p>
+          ) : (
+            <div className="library-list">
+              {savedTheses.map((item) => {
+                const lastExecution = [...history]
+                  .reverse()
+                  .find((record) => record.thesisId === item.id);
+                return (
+                  <article key={item.id}>
+                    <div>
+                      <strong>{item.asset}</strong>
+                      <p>{item.thesisText}</p>
+                    </div>
+                    <div className="library-meta">
+                      <span>{item.status}</span>
+                      <span>{item.provenance.kind}</span>
+                      <span>Created {new Date(item.createdAt).toLocaleDateString()}</span>
+                      <span>Updated {new Date(item.updatedAt).toLocaleDateString()}</span>
+                      <span>Expires {new Date(item.expiry).toLocaleDateString()}</span>
+                      <span>Last execution: {lastExecution?.status ?? "None"}</span>
+                    </div>
+                    <div className="library-actions">
+                      <button
+                        className="secondary compact"
+                        type="button"
+                        onClick={() => openSaved(item)}
+                      >
+                        Open / edit
+                      </button>
+                      <button
+                        className="secondary compact"
+                        type="button"
+                        onClick={() => void forkSaved(item)}
+                      >
+                        Duplicate / fork
+                      </button>
+                      <button
+                        className="secondary compact"
+                        type="button"
+                        onClick={() => void copyShareLink(item)}
+                      >
+                        Copy share link
+                      </button>
+                      <button
+                        className="danger compact"
+                        type="button"
+                        onClick={() => deleteSaved(item)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
         <div className="flow-steps" aria-label="Workflow progress">
           {["01 Intent", "02 Structure", "03 Risk", "04 Authorize", "05 Receipt"].map(
             (step, index) => (
@@ -173,6 +414,21 @@ export function ExecutableThesisWorkspace({
               </div>
               <span className={`status-pill ${thesis.status.toLowerCase()}`}>{thesis.status}</span>
             </div>
+
+            {savedThesis && (
+              <div className="provenance-strip">
+                <strong>
+                  {savedThesis.provenance.kind === "ORIGINAL" ? "ORIGINAL THESIS" : "FORKED THESIS"}
+                </strong>
+                {savedThesis.provenance.kind === "FORK" && (
+                  <span>
+                    Forked from {savedThesis.provenance.parentThesisId} · Root thesis{" "}
+                    {savedThesis.provenance.rootThesisId}
+                  </span>
+                )}
+                <code>{savedThesis.fingerprint.slice(0, 24)}…</code>
+              </div>
+            )}
 
             <div className="translation-grid">
               <div className="intent-pane">
@@ -239,10 +495,25 @@ export function ExecutableThesisWorkspace({
                 <strong>Portfolio and policy evaluation</strong>
                 <p>Computed by deterministic constraints using labelled fixture values.</p>
               </div>
-              <button onClick={runRiskCheck} type="button">
-                Run risk check
-              </button>
+              <div className="inline-actions">
+                <button className="secondary" onClick={() => void saveThesis()} type="button">
+                  Save thesis
+                </button>
+                {savedThesis && (
+                  <button
+                    className="secondary"
+                    onClick={() => void copyShareLink(savedThesis)}
+                    type="button"
+                  >
+                    Copy share link
+                  </button>
+                )}
+                <button onClick={runRiskCheck} type="button">
+                  Run risk check
+                </button>
+              </div>
             </div>
+            {savedMessage && <p className="saved-message">{savedMessage}</p>}
           </section>
         )}
 
@@ -274,7 +545,7 @@ export function ExecutableThesisWorkspace({
             <div className="risk-metrics">
               <div>
                 <span>Available USDC</span>
-                <strong>{money(DEMO_PORTFOLIO.availableUsdcUsd)}</strong>
+                <strong>{money(activePortfolio.availableUsdcUsd)}</strong>
               </div>
               <div>
                 <span>Required reserve</span>
@@ -290,7 +561,7 @@ export function ExecutableThesisWorkspace({
               </div>
               <div>
                 <span>Current exposure</span>
-                <strong>{money(DEMO_PORTFOLIO.currentAssetExposureUsd)}</strong>
+                <strong>{money(activePortfolio.currentAssetExposureUsd)}</strong>
               </div>
               <div>
                 <span>Post-trade exposure</span>
@@ -303,7 +574,7 @@ export function ExecutableThesisWorkspace({
               <div>
                 <span>Slippage</span>
                 <strong>
-                  {DEMO_PORTFOLIO.quotedSlippagePercent}% / {thesis.parameters.maxSlippagePercent}%
+                  {activePortfolio.quotedSlippagePercent}% / {thesis.parameters.maxSlippagePercent}%
                   max
                 </strong>
               </div>
@@ -334,11 +605,31 @@ export function ExecutableThesisWorkspace({
             <BaseSepoliaTestSwapCard
               key={thesis.planRevision}
               onStatusChange={handleExecutionStatus}
+              onConfirmedExecution={handleConfirmedExecution}
               smartAccount={smartAccount}
               thesis={thesis}
               risk={risk!}
             />
           )}
+
+        {history.length > 0 && (
+          <section className="surface execution-history">
+            <p className="eyebrow">Execution history</p>
+            <h2>Confirmed receipts</h2>
+            {history.map((record) => (
+              <div key={record.executionId}>
+                <strong>
+                  {record.status} · {record.network}
+                </strong>
+                <span>
+                  {record.sellAmount} → {record.receiveAmount}
+                </span>
+                <code>{record.transactionHash}</code>
+              </div>
+            ))}
+            <p className="field-note">Historical receipts never authorize future execution.</p>
+          </section>
+        )}
       </section>
 
       <aside className="context-column">

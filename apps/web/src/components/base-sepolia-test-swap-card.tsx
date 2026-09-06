@@ -25,6 +25,7 @@ import {
   type ThesisRiskResult,
   type ThesisStatus,
 } from "../lib/executable-thesis";
+import type { ThesisExecutionRecord } from "../lib/persisted-thesis";
 
 const publicClient = createPublicClient({
   chain: baseSepolia,
@@ -45,11 +46,13 @@ export function BaseSepoliaTestSwapCard({
   thesis,
   risk,
   onStatusChange,
+  onConfirmedExecution,
 }: Readonly<{
   smartAccount: EndUserEvmSmartAccount | undefined;
   thesis: ExecutableThesis;
   risk: ThesisRiskResult;
   onStatusChange: (status: ThesisStatus) => void;
+  onConfirmedExecution?: (record: Omit<ThesisExecutionRecord, "thesisId">) => void;
 }>) {
   const smartAccountAddress = asEvmAddress(smartAccount?.address);
   const { sendUserOperation, status: sendStatus, error: sendError } = useSendUserOperation();
@@ -66,6 +69,7 @@ export function BaseSepoliaTestSwapCard({
   const [confirmedAt, setConfirmedAt] = useState<string>();
   const [nowSeconds, setNowSeconds] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
   const submissionLock = useRef(false);
+  const recordedTransaction = useRef<string | undefined>(undefined);
 
   const receipt = useWaitForUserOperation({
     ...(userOperationHash ? { userOperationHash } : {}),
@@ -220,6 +224,23 @@ export function BaseSepoliaTestSwapCard({
     transactionHash,
     userOperationHash,
   });
+
+  useEffect(() => {
+    if (!confirmedReceipt || !smartAccountAddress || !onConfirmedExecution) return;
+    if (recordedTransaction.current === confirmedReceipt.transactionHash) return;
+    recordedTransaction.current = confirmedReceipt.transactionHash;
+    onConfirmedExecution({
+      executionId: confirmedReceipt.transactionHash,
+      network: "base-sepolia",
+      status: "CONFIRMED",
+      sellAmount: "1 mUSDC",
+      receiveAmount: `${formatUnits(confirmedReceipt.receivedRawBuyAmount, 8)} NOTB20`,
+      executedAt: confirmedReceipt.confirmedAt,
+      smartAccount: smartAccountAddress,
+      userOperationHash: confirmedReceipt.userOperationHash,
+      transactionHash: confirmedReceipt.transactionHash,
+    });
+  }, [confirmedReceipt, onConfirmedExecution, smartAccountAddress]);
 
   return (
     <section className="surface test-swap-card">
