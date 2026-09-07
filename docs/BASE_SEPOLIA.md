@@ -101,7 +101,9 @@ The logs show `1,000,000` raw mUSDC approved to and pulled by `VectorExecutor`, 
 router allowance that returns to zero, `100,000,000` raw NOTB20 delivered through the executor to
 the Smart Account recipient, and the matching `IntentExecuted` and UserOperation events.
 
-**BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS.**
+**BASE SEPOLIA LIVE DEMO · TEST ASSETS · NO REAL STOCKS.** Fixed 1 mUSDC test settlement. This proves
+Smart Account authorization and `VectorExecutor` settlement invariants; it does not execute the
+displayed $320/$180 adapted dollar position.
 
 ## Existing VectorExecutor
 

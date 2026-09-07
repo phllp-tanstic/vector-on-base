@@ -773,6 +773,15 @@ blockquote {
 .testnet-banner span {
   color: #b8c8e9;
 }
+.test-settlement-disclosure {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #c7d6f4;
+  border-radius: 7px;
+  background: #f3f7ff;
+  color: #263b63;
+  line-height: 1.5;
+}
 .muted,
 .status {
   color: #687383;

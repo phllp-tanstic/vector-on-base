@@ -159,9 +159,10 @@ units. The receipt succeeded at Base Sepolia block `46,409,263`.
 - UserOperation: `0x586d7c51d1768c18b4fe742d91a38eede645ed388bb43645c54d3a67a1eaa1cb`
 - Transaction: [`0xb68a0b…175607d`](https://sepolia.basescan.org/tx/0xb68a0b23e4582471ce9a7a862a3e2db9aa41d0b7953d18ceb48427e0b717607d)
 
-**BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS.** This proves the authorization and settlement
-path, not production stock liquidity. Full fixtures and evidence are in
-[docs/BASE_SEPOLIA.md](docs/BASE_SEPOLIA.md).
+**BASE SEPOLIA LIVE DEMO · TEST ASSETS · NO REAL STOCKS.** This is a fixed 1 mUSDC test settlement.
+It proves Smart Account authorization and `VectorExecutor` settlement invariants; it does not
+execute the displayed $320/$180 adapted dollar position or prove production stock liquidity. Full
+fixtures and evidence are in [docs/BASE_SEPOLIA.md](docs/BASE_SEPOLIA.md).
 
 ## Production Mainnet path
 
@@ -171,14 +172,16 @@ validation; 0x Swap API v2 exact-sell integration; a versioned trusted Allowance
 target/spender and quote validation; a read-only mainnet readiness checker; and a Chainlink Data
 Streams V11 reference-price adapter with coherent snapshot binding.
 
-The remaining gates are explicit:
+External access and credentials remain pending. Provider-backed readiness wiring, quote
+minimum/freshness hardening, production executor deployment/configuration, and operational controls
+must also be completed before Base Mainnet execution. The current gates are explicit:
 
 - **0x — ACCESS PENDING:** current production routing reports
   `BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE`; tokenized-equity access/legal entitlement is pending.
 - **Chainlink — ACCESS PENDING:** server credentials and entitlement to the pinned equity streams
   are pending.
-- **Base Mainnet — NOT DEPLOYED:** `VectorExecutor` is intentionally not deployed until the
-  external production gates are resolved.
+- **Base Mainnet — NOT DEPLOYED:** `VectorExecutor` is intentionally not deployed or configured for
+  production execution.
 
 `npm run verify:mainnet-readiness` is read-only and reports these states without deploying,
 signing, broadcasting, or submitting a UserOperation.
@@ -262,9 +265,10 @@ Mainnet executor; it is still strictly read-only. Access restrictions are report
 
 ## Current scope and access gates
 
-Base Mainnet execution is intentionally gated: no Mainnet executor is deployed, 0x BStocks access
-is pending, and Chainlink equity-feed entitlement is pending. Persistence is browser-local,
-provenance is application-level rather than onchain-attested, and Demo Mode uses isolated Sepolia
-test assets. These are the current V1 scope and access boundaries.
+Base Mainnet execution is intentionally gated. External 0x BStocks access and Chainlink credentials
+remain pending. Provider-backed readiness wiring, quote minimum/freshness hardening, production
+executor deployment/configuration, and operational controls must also be completed. Persistence is
+browser-local, provenance is application-level rather than onchain-attested, and Demo Mode uses
+isolated Sepolia test assets. These are the current V1 scope and access boundaries.
 
 Reusable submission copy and judge FAQ: [docs/SUBMISSION.md](docs/SUBMISSION.md).

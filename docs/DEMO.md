@@ -19,8 +19,9 @@ NVDA stock; it is only the isolated test settlement asset.
 Action: Point to the headline and the four-step strip.
 
 Say: “Vector turns a market thesis into a portfolio-aware, risk-constrained position that I can
-authorize on Base. AI structures what I mean; deterministic code applies portfolio and risk rules;
-I authorize the final execution.”
+authorize on Base. The deterministic demo interpreter structures what I mean; deterministic code
+applies portfolio and risk rules; I authorize the final execution. A production AI interpreter may
+later operate within that non-authoritative interpretation boundary.”
 
 Do not dwell on: protocol names, contract addresses, or production dependencies.
 
@@ -77,7 +78,9 @@ Do not dwell on: long identifiers. Provenance is application metadata, not an on
 Action: Accept the recipient adaptation if required, then select **Prepare execution**.
 
 Say: “Preparation is explicit and creates a five-minute package. I am authorizing a 1 mUSDC test
-settlement on Base Sepolia with a minimum receive of 1 NOTB20.”
+settlement on Base Sepolia with a minimum receive of 1 NOTB20. This proves Smart Account
+authorization and VectorExecutor settlement invariants; it does not execute the displayed $320/$180
+adapted dollar position.”
 
 Action: Point to **2 onchain calls**.
 
@@ -101,8 +104,9 @@ confirmed Base Sepolia transaction, timestamp, and deterministic reason.”
 Action: Point briefly to Capability readiness.
 
 Say: “Smart Account authorization, VectorExecutor architecture, B20 validation, and deterministic
-risk are ready. 0x BStocks and Chainlink equity access are pending, and Base Mainnet is not
-deployed.”
+risk are demonstrated. External access and credentials remain pending. Provider-backed readiness
+wiring, quote minimum and freshness hardening, production executor deployment and configuration,
+and operational controls must also be completed before Base Mainnet execution.”
 
 Do not dwell on: the readiness panel after stating the truthful boundary.
 

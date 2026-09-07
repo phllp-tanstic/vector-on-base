@@ -23,7 +23,7 @@ export default function HomePage() {
               </li>
               <li>
                 <strong>Structure</strong>
-                <span>AI creates an Executable Thesis</span>
+                <span>Vector structures an Executable Thesis</span>
               </li>
               <li>
                 <strong>Adapt</strong>

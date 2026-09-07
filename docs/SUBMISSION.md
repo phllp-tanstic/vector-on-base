@@ -93,7 +93,9 @@ Use the full [judge demo runbook](./DEMO.md), or follow this short path:
 6. Prepare the exact two-call Base Sepolia package.
 7. Show Coinbase Smart Account authorization and the confirmed receipt.
 
-Always label execution **BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS**.
+Always label execution **BASE SEPOLIA LIVE DEMO · TEST ASSETS · NO REAL STOCKS** and disclose:
+“Fixed 1 mUSDC test settlement. This proves Smart Account authorization and VectorExecutor
+settlement invariants; it does not execute the displayed $320/$180 adapted dollar position.”
 
 ## L. Known production-access gates
 
@@ -101,13 +103,14 @@ Always label execution **BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS**.
   external tokenized-equity access/legal entitlement is pending.
 - Chainlink Data Streams server credentials and entitlement to the pinned equity streams are
   pending.
-- Base Mainnet VectorExecutor is intentionally not deployed until those external gates are
-  resolved.
+- Provider-backed readiness wiring, quote minimum/freshness hardening, production executor
+  deployment/configuration, and operational controls must also be completed before Base Mainnet
+  execution.
 - Persistence is browser-local and provenance is application-level, not onchain-attested.
 
 ## M. GitHub link
 
-`TODO: ADD PUBLIC GITHUB REPOSITORY URL`
+[https://github.com/phllp-tanstic/vector-on-base](https://github.com/phllp-tanstic/vector-on-base)
 
 ## N. Live demo link
 
@@ -175,6 +178,6 @@ authorization.
 
 ### What's preventing Mainnet execution today?
 
-The production integration and read-only readiness checker are implemented, but 0x BStocks access
-and Chainlink equity-stream credentials/entitlements are pending. VectorExecutor is intentionally
-not deployed on Base Mainnet until those external production gates are resolved.
+External access and credentials remain pending. Provider-backed readiness wiring, quote
+minimum/freshness hardening, production executor deployment/configuration, and operational controls
+must also be completed before Base Mainnet execution.

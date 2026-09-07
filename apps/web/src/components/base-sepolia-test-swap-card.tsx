@@ -263,6 +263,11 @@ export function BaseSepoliaTestSwapCard({
         <span>TEST ASSETS</span>
         <span>NO REAL STOCKS</span>
       </div>
+      <p className="test-settlement-disclosure">
+        <strong>Fixed 1 mUSDC test settlement.</strong> This proves Smart Account authorization and
+        VectorExecutor settlement invariants; it does not execute the displayed $320/$180 adapted
+        dollar position.
+      </p>
       <p className="eyebrow">Execution preview</p>
       <h2>You are authorizing</h2>
       <p className="muted">

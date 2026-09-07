@@ -10,8 +10,9 @@ trade. Base Sepolia remains the only end-to-end execution proof documented in
 The production path is intentionally split across packages:
 
 1. `@vector/integrations` defines canonical Base USDC and the verified Coinbase stock registry.
-2. The Base B20 verifier checks marker code, factory recognition/initialization, metadata,
-   multiplier behavior, and supported interfaces.
+2. The Base B20 verifier checks marker code, factory recognition/initialization, metadata, and
+   multiplier behavior. It also performs best-effort interface capability probes; unavailable
+   `supportsInterface` responses do not fail verification.
 3. Portfolio balance and valuation code reads raw balances and applies independent reference
    prices.
 4. The 0x client obtains an exact-sell quote whose taker is the configured executor.
@@ -54,8 +55,10 @@ VECTOR_MAINNET_SELL_USDC="1000000" \
 npm run verify:mainnet-readiness
 ```
 
-`BASE_RPC_URL` defaults to the public Base endpoint. `VECTOR_MAINNET_SMART_ACCOUNT` is optional; if
-present, it must be a valid non-zero address and its canonical USDC balance is checked.
+`BASE_RPC_URL` defaults to the public Base endpoint. `VECTOR_MAINNET_SMART_ACCOUNT` is optional for
+preliminary read-only checks; if present, it must be a valid non-zero address and its canonical USDC
+balance is checked. A canonical `READY` result requires recipient/account-bound risk context for the
+same Smart Account, quote, and reference snapshot.
 `VECTOR_MAINNET_STOCK_SYMBOL` defaults to `NVDAc`. An optional
 `VECTOR_MAINNET_STOCK_TOKEN_ADDRESS` pins the expected registry address and cannot introduce a new
 asset. The currently verified stock boundary is `NVDAc`, `AAPLc`, `GOOGLc`, and `METAc`. The raw
@@ -85,8 +88,8 @@ and optionally constructs a read-only provider-backed portfolio/risk projection 
 - `EXECUTOR_NOT_CONFIGURED`: no valid executor is configured or no bytecode exists at its address.
 - `ASSET_NOT_SUPPORTED`: the stock is outside the verified registry or either asset is not enabled
   in the executor.
-- `B20_VALIDATION_FAILED`: live token identity, metadata, factory, marker, multiplier, or interface
-  verification failed.
+- `B20_VALIDATION_FAILED`: required live token identity, metadata, factory, marker, or multiplier
+  verification failed, or an available interface capability probe returned an incompatible result.
 - `RISK_REJECTED`: the independent deterministic risk engine rejected the candidate.
 - `INVALID_QUOTE`: quote fields or canonical intent/plan construction failed validation.
 - `REFERENCE_PRICE_PROVIDER_MISSING`: executable quote and contract checks progressed, but no
@@ -109,7 +112,7 @@ unsupported Base token, or an untyped quote error.
   (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`);
 - the buy token is an enabled entry in the verified Coinbase stock registry and passes live B20 and
   metadata validation;
-- when supplied, the Smart Account is valid and has enough USDC;
+- a Smart Account used during preliminary checks is valid and has enough USDC;
 - the executor supports both assets;
 - the 0x exact-sell response matches chain, pair, executor taker, exact sell amount, minimum buy
   amount, non-empty calldata, and zero native value;
@@ -122,6 +125,10 @@ unsupported Base token, or an untyped quote error.
   accepts it;
 - the production builder creates exactly `approve(executor, quotedSellAmount)` followed by
   `executor.execute(intent)` with its bounded nonce and deadline.
+
+Although a Smart Account can be omitted while running earlier read-only checks, the account cannot
+be omitted from a canonical `READY` candidate: its recipient/account-bound risk context must bind
+the same quote and reference snapshot.
 
 ## Reference-price dependency audit
 
