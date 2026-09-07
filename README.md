@@ -27,7 +27,10 @@ position.
 | Chainlink equity streams                    | **ACCESS PENDING**           |
 | Base Mainnet VectorExecutor                 | **NOT DEPLOYED**             |
 
-Demo execution is clearly isolated: **BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS**.
+Demo execution is clearly isolated: **BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS**. A finite
+testnet-only faucet lets public testers explicitly claim 10 mUSDC from their own Smart Account,
+subject to a 24-hour per-address cooldown; the token has no monetary value and the faucet has no
+Base Mainnet role.
 
 ## Run locally
 

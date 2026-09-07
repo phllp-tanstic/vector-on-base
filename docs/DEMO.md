@@ -1,6 +1,6 @@
 # Vector on Base — Judge Demo Runbook
 
-Target length: 2–3 minutes. Use a pre-funded Coinbase Smart Account on Base Sepolia. The demo must
+Target length: 2–3 minutes. Use a Coinbase Smart Account on Base Sepolia. The demo must
 always show **BASE SEPOLIA LIVE DEMO · TEST ASSETS · NO REAL STOCKS**. Never describe NOTB20 as
 NVDA stock; it is only the isolated test settlement asset.
 
@@ -8,8 +8,9 @@ NVDA stock; it is only the isolated test settlement asset.
 
 - Open the app on desktop and confirm the header says Base Sepolia.
 - Sign in with the demo email and confirm the Coinbase Smart Account resolves.
-- Confirm the account has at least 1 mUSDC. If not, follow the manual setup in
-  `docs/BASE_SEPOLIA.md`; do not mint from the product UI.
+- Confirm the public demo faucet is configured and funded. If the account has less than 1 mUSDC,
+  use **Get 10 demo mUSDC** and authorize the separate faucet claim. These Base Sepolia test assets
+  have no monetary value. Never claim automatically or combine the claim with execution.
 - Select **Reset current demo**. This preserves sign-in, the wallet, saved theses, and confirmed
   receipts. Clear saved demo theses separately only if the library needs a clean slate.
 - Keep one previously confirmed receipt available as the network fallback.
@@ -75,7 +76,8 @@ Do not dwell on: long identifiers. Provenance is application metadata, not an on
 
 ## 2:10–2:40 — Authorization and execution proof
 
-Action: Accept the recipient adaptation if required, then select **Prepare execution**.
+Action: If the recipient has less than 1 mUSDC, claim from the finite demo faucet first and wait for
+the balance refresh. Accept the recipient adaptation if required, then select **Prepare execution**.
 
 Say: “Preparation is explicit and creates a five-minute package. I am authorizing a 1 mUSDC test
 settlement on Base Sepolia with a minimum receive of 1 NOTB20. This proves Smart Account

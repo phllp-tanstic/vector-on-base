@@ -14,20 +14,23 @@ explicitly create one; `enableSpendPermissions` is always false.
 
 1. Create/select a CDP project and enable email authentication.
 2. Add `http://localhost:3000` to its allowed origins.
-3. Create `apps/web/.env.local` containing only:
+3. Create `apps/web/.env.local` containing only browser-safe public configuration:
 
    ```sh
    NEXT_PUBLIC_CDP_PROJECT_ID=your-public-project-id
+   NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS=0xDeployedBaseSepoliaFaucet
    ```
 
 4. Run `npm run dev --workspace apps/web` and open `http://localhost:3000`.
 5. Enter your email, then the six-digit OTP sent by CDP.
 6. Confirm the page shows the user-controlled Smart Account and `Base Sepolia (84532)`.
-7. Complete the deterministic thesis and risk flow, then click **Prepare execution**. Nothing is
-   submitted on page load or preparation.
-8. Review the exact fixture amounts, contracts, nonce, deadline, and two calls.
-9. Click **Authorize 2 calls**, approve the Coinbase Smart Account request, and wait for the
-   UserOperation receipt, transaction hash, balance refresh, and BaseScan link.
+7. If the account has less than 1 mUSDC, click **Get 10 demo mUSDC** and explicitly authorize the
+   separate one-call faucet UserOperation. Wait for confirmation and the automatic balance refresh.
+8. Complete the deterministic thesis and risk flow, then click **Prepare execution**. Nothing is
+   submitted on page load or preparation, and a successful faucet claim never prepares execution.
+9. Review the exact fixture amounts, contracts, nonce, deadline, and two calls.
+10. Click **Authorize 2 calls**, approve the Coinbase Smart Account request, and wait for the
+    UserOperation receipt, transaction hash, balance refresh, and BaseScan link.
 
 The live proof is the ordered two-call fixture settlement described below. Custom sponsorship
 remains unconfigured; authorization and any applicable Sepolia gas sponsorship are distinct
@@ -36,6 +39,21 @@ concerns.
 `NEXT_PUBLIC_CDP_PROJECT_ID` and onchain addresses are public configuration. CDP API secrets, Wallet
 Secrets, developer wallet credentials, deployer private keys, and any backend signing credentials
 must never enter `apps/web`, `.env.local`, or another `NEXT_PUBLIC_*` value.
+
+## Public demo faucet
+
+`BaseSepoliaMockUSDCFaucet` is a Base Sepolia fixture with no production role. It holds a finite
+reserve of mock mUSDC and transfers exactly `10_000_000` raw units (10 mUSDC) to `msg.sender` when
+that Smart Account calls `claim()`. Claims have no recipient, token, or amount parameter, require no
+token approval, and mint nothing. Each recipient can claim once per 24 hours; the contract enforces
+the cooldown onchain. The faucet fails cleanly when less than 10 mUSDC remains.
+
+The browser reads faucet bytecode, inventory, the current Smart Account's last claim timestamp, and
+mUSDC balance over the existing public Base Sepolia read path. Missing or invalid config, wrong
+chain, no authenticated Smart Account, insufficient inventory, or an active cooldown disables the
+claim. The button creates exactly one zero-value `claim()` call and sends it only after the user's
+explicit Coinbase Smart Account authorization. These are Base Sepolia test assets with no monetary
+value; the faucet is absent from all Base Mainnet registries and readiness, 0x, and Chainlink paths.
 
 ## Browser test-swap workflow
 
@@ -171,6 +189,57 @@ export VECTOR_TEST_MOCK_USDC_ADDRESS="0xDeployedMockUSDC"
 export VECTOR_TEST_MOCK_B20_LIKE_TOKEN_ADDRESS="0xDeployedMockB20LikeToken"
 export VECTOR_TEST_MOCK_EXECUTION_ROUTER_ADDRESS="0xDeployedMockExecutionRouter"
 ```
+
+## Deploy and fund the demo faucet
+
+The dedicated faucet script reads the existing `VECTOR_TEST_MOCK_USDC_ADDRESS`, verifies that token
+bytecode exists, deploys only the faucet, and mints a finite 1,000 mUSDC reserve to it. This is about
+100 default claims. It rejects every chain except Base Sepolia and does not deploy or reconfigure
+`VectorExecutor`.
+
+Simulate first with the existing encrypted Foundry keystore account:
+
+```sh
+forge script script/DeployBaseSepoliaDemoFaucet.s.sol:DeployBaseSepoliaDemoFaucet \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer \
+  -vvvv
+```
+
+After reviewing the mock token, new faucet, and `1_000_000_000`-unit inventory, broadcast manually:
+
+```sh
+forge script script/DeployBaseSepoliaDemoFaucet.s.sol:DeployBaseSepoliaDemoFaucet \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer \
+  --broadcast \
+  -vvvv
+```
+
+Copy the printed faucet address to `apps/web/.env.local` as
+`NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS`, rebuild/redeploy the web app, and verify its bytecode
+and 1,000 mUSDC inventory before public use. Also keep it in the maintainer's current shell as
+`VECTOR_TEST_DEMO_FAUCET_ADDRESS` for the manual refill command below. These values are addresses,
+not secrets.
+
+### Manual finite refill
+
+If inventory drops below the desired reserve, the existing Base Sepolia mock's test-only mint entry
+point permits replenishment. Use the same reviewed maintainer keystore workflow and an explicit
+finite amount; never add a browser or backend signer:
+
+```sh
+cast send "$VECTOR_TEST_MOCK_USDC_ADDRESS" \
+  "mint(address,uint256)" \
+  "$VECTOR_TEST_DEMO_FAUCET_ADDRESS" \
+  1000000000 \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --account vector-sepolia-deployer
+```
+
+Then read `balanceOf(faucet)` and record the refill transaction. The example adds another finite
+1,000 mUSDC; choose and review a bounded amount appropriate to expected demo traffic. The faucet
+itself exposes no refill, mint, arbitrary-token, or arbitrary-recipient method.
 
 ## Configure the existing executor
 

@@ -26,6 +26,7 @@ import {
   type ThesisStatus,
 } from "../lib/executable-thesis";
 import type { ThesisExecutionRecord } from "../lib/persisted-thesis";
+import { BaseSepoliaDemoFaucet } from "./base-sepolia-demo-faucet";
 import { CopyableValue } from "./copyable-value";
 
 const publicClient = createPublicClient({
@@ -303,10 +304,22 @@ export function BaseSepoliaTestSwapCard({
         </p>
       )}
 
+      <BaseSepoliaDemoFaucet
+        smartAccount={smartAccount}
+        musdcBalance={balances?.sell}
+        onBalanceRefresh={refreshBalances}
+      />
+
       <button
         type="button"
         onClick={prepareSwap}
-        disabled={!smartAccountAddress || isPending || thesis.status !== "READY_FOR_AUTHORIZATION"}
+        disabled={
+          !smartAccountAddress ||
+          isPending ||
+          thesis.status !== "READY_FOR_AUTHORIZATION" ||
+          balances?.sell === undefined ||
+          balances.sell < TEST_SWAP_SELL_AMOUNT
+        }
       >
         {plan ? "Prepare a fresh execution" : "Prepare execution"}
       </button>

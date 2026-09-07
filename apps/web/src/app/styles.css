@@ -53,6 +53,38 @@ button.secondary {
   background: white;
   color: #192130;
 }
+.demo-faucet {
+  margin: 16px 0;
+  border: 1px solid #c9d8fb;
+  border-radius: 10px;
+  background: #f4f7ff;
+}
+.demo-faucet.prominent {
+  padding: 18px;
+}
+.demo-faucet-content > :last-child {
+  margin-bottom: 0;
+}
+.demo-faucet-content .status {
+  margin-bottom: 10px;
+}
+.demo-faucet-content button + button {
+  margin-left: 8px;
+}
+.secondary-faucet {
+  padding: 12px 16px;
+  background: white;
+}
+.secondary-faucet > summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.secondary-faucet[open] > summary {
+  margin-bottom: 14px;
+}
+.compact-copy {
+  font-size: 0.88rem;
+}
 button.danger {
   border: 1px solid #e2b9b2;
   background: white;
