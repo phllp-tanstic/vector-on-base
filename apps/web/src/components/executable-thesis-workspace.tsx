@@ -1,7 +1,7 @@
 "use client";
 
 import type { EndUserEvmSmartAccount } from "@coinbase/cdp-core";
-import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DEFAULT_DEMO_THESIS,
@@ -22,7 +22,6 @@ import {
   LocalExecutableThesisRepository,
   LocalThesisExecutionRepository,
   adaptPublicThesis,
-  createShareUrl,
   persistedFromWorkingThesis,
   resetLocalDemoProductState,
   toPublicThesisPayload,
@@ -31,6 +30,12 @@ import {
   type PublicThesisPayload,
   type ThesisExecutionRecord,
 } from "../lib/persisted-thesis";
+import {
+  SHARE_FEEDBACK_DURATION_MS,
+  copyThesisShareLink,
+  shareButtonLabel,
+  type ShareCopyState,
+} from "../lib/thesis-share";
 import { BaseSepoliaTestSwapCard } from "./base-sepolia-test-swap-card";
 import { CopyableValue } from "./copyable-value";
 import { SharedThesisView } from "./shared-thesis-view";
@@ -120,6 +125,11 @@ export function ExecutableThesisWorkspace({
   const [savedTheses, setSavedTheses] = useState<readonly PersistedExecutableThesis[]>([]);
   const [savedThesis, setSavedThesis] = useState<PersistedExecutableThesis>();
   const [savedMessage, setSavedMessage] = useState<string>();
+  const [shareFeedback, setShareFeedback] = useState<{
+    readonly target: string;
+    readonly state: Exclude<ShareCopyState, "default">;
+  }>();
+  const shareFeedbackTimer = useRef<number | undefined>(undefined);
   const [history, setHistory] = useState<readonly ThesisExecutionRecord[]>([]);
   const [isSharedAdapted, setIsSharedAdapted] = useState(false);
   const [persistenceError, setPersistenceError] = useState<string>();
@@ -152,6 +162,14 @@ export function ExecutableThesisWorkspace({
       );
     }
   }, []);
+  useEffect(
+    () => () => {
+      if (shareFeedbackTimer.current !== undefined) {
+        window.clearTimeout(shareFeedbackTimer.current);
+      }
+    },
+    [],
+  );
   const expiryLocal = useMemo(() => {
     if (!thesis) return "";
     const date = new Date(thesis.parameters.expiryIso);
@@ -287,13 +305,45 @@ export function ExecutableThesisWorkspace({
     setIsSharedAdapted(false);
   }
 
-  async function copyShareLink(item: PersistedExecutableThesis) {
-    try {
-      await navigator.clipboard.writeText(createShareUrl(item, window.location.origin));
-      setSavedMessage("Share link copied · it contains reusable intent, not execution authority");
-    } catch {
-      setSavedMessage("Could not copy the share link in this browser.");
+  function showShareFeedback(target: string, state: Exclude<ShareCopyState, "default">) {
+    if (shareFeedbackTimer.current !== undefined) {
+      window.clearTimeout(shareFeedbackTimer.current);
     }
+    setShareFeedback({ target, state });
+    shareFeedbackTimer.current = window.setTimeout(() => {
+      setShareFeedback((current) => (current?.target === target ? undefined : current));
+    }, SHARE_FEEDBACK_DURATION_MS);
+  }
+
+  function shareState(target: string): ShareCopyState {
+    return shareFeedback?.target === target ? shareFeedback.state : "default";
+  }
+
+  async function copyShareLink(item: PersistedExecutableThesis, target: string) {
+    try {
+      const result = await copyThesisShareLink(item, window.location.origin);
+      showShareFeedback(target, result.copied ? "copied" : "failed");
+    } catch {
+      showShareFeedback(target, "failed");
+    }
+  }
+
+  async function shareExecutedThesis() {
+    if (!thesis) return;
+    try {
+      const shareable =
+        savedThesis ?? (await persistedFromWorkingThesis(thesis, smartAccountAddress));
+      const result = await copyThesisShareLink(shareable, window.location.origin);
+      showShareFeedback("receipt", result.copied ? "copied" : "failed");
+    } catch {
+      showShareFeedback("receipt", "failed");
+    }
+  }
+
+  function viewMyTheses() {
+    const library = document.querySelector<HTMLElement>("#my-theses");
+    library?.scrollIntoView({ behavior: "smooth", block: "start" });
+    library?.focus({ preventScroll: true });
   }
 
   function adaptShared() {
@@ -379,7 +429,7 @@ export function ExecutableThesisWorkspace({
           </section>
         )}
 
-        <section className="surface thesis-library">
+        <section className="surface thesis-library" id="my-theses" tabIndex={-1}>
           <div className="section-heading">
             <div>
               <p className="eyebrow">Owned library</p>
@@ -432,9 +482,11 @@ export function ExecutableThesisWorkspace({
                       <button
                         className="secondary compact"
                         type="button"
-                        onClick={() => void copyShareLink(item)}
+                        onClick={() => void copyShareLink(item, `library:${item.id}`)}
                       >
-                        Copy share link
+                        <span aria-live="polite">
+                          {shareButtonLabel("library", shareState(`library:${item.id}`))}
+                        </span>
                       </button>
                       <button
                         className="danger compact"
@@ -596,10 +648,12 @@ export function ExecutableThesisWorkspace({
                 {savedThesis && (
                   <button
                     className="secondary"
-                    onClick={() => void copyShareLink(savedThesis)}
+                    onClick={() => void copyShareLink(savedThesis, `current:${savedThesis.id}`)}
                     type="button"
                   >
-                    Copy share link
+                    <span aria-live="polite">
+                      {shareButtonLabel("library", shareState(`current:${savedThesis.id}`))}
+                    </span>
                   </button>
                 )}
                 <button onClick={runRiskCheck} type="button">
@@ -710,6 +764,9 @@ export function ExecutableThesisWorkspace({
               smartAccount={smartAccount}
               thesis={thesis}
               risk={risk!}
+              onShareThesis={() => void shareExecutedThesis()}
+              onViewMyTheses={viewMyTheses}
+              shareButtonLabel={shareButtonLabel("receipt", shareState("receipt"))}
             />
           )}
 

@@ -49,12 +49,18 @@ export function BaseSepoliaTestSwapCard({
   risk,
   onStatusChange,
   onConfirmedExecution,
+  onShareThesis,
+  onViewMyTheses,
+  shareButtonLabel,
 }: Readonly<{
   smartAccount: EndUserEvmSmartAccount | undefined;
   thesis: ExecutableThesis;
   risk: ThesisRiskResult;
   onStatusChange: (status: ThesisStatus) => void;
   onConfirmedExecution?: (record: Omit<ThesisExecutionRecord, "thesisId">) => void;
+  onShareThesis?: () => void;
+  onViewMyTheses?: () => void;
+  shareButtonLabel: string;
 }>) {
   const smartAccountAddress = asEvmAddress(smartAccount?.address);
   const { sendUserOperation, status: sendStatus, error: sendError } = useSendUserOperation();
@@ -520,6 +526,14 @@ export function BaseSepoliaTestSwapCard({
                 <li>{DEMO_PORTFOLIO.quotedSlippagePercent}% slippage within maximum</li>
                 <li>User explicitly authorized both calls</li>
               </ul>
+            </div>
+            <div className="receipt-actions" aria-label="Executed thesis actions">
+              <button className="secondary" type="button" onClick={onShareThesis}>
+                <span aria-live="polite">{shareButtonLabel}</span>
+              </button>
+              <button className="secondary" type="button" onClick={onViewMyTheses}>
+                View in My Theses
+              </button>
             </div>
           </div>
         ) : (

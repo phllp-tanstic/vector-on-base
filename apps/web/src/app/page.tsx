@@ -7,11 +7,15 @@ export default function HomePage() {
       <section className="app-shell">
         <header className="app-header">
           <a className="wordmark" href="#">
-            VECTOR<span>◆</span>
+            VECTOR<span>[ BASE ]</span>
           </a>
           <div className="header-copy">
-            <p className="eyebrow">Intent execution on Base</p>
-            <h1>Turn a market view into controlled execution.</h1>
+            <p className="eyebrow">[ Vector / Base ]</p>
+            <h1>
+              Market intent.
+              <br />
+              Controlled execution.
+            </h1>
             <p className="lede">
               Turn a market thesis into a portfolio-aware, risk-constrained position you can
               authorize on Base.
@@ -32,6 +36,10 @@ export default function HomePage() {
               <li>
                 <strong>Authorize</strong>
                 <span>You approve the final execution</span>
+              </li>
+              <li>
+                <strong>Settle</strong>
+                <span>Onchain proof closes the loop</span>
               </li>
             </ol>
           </div>

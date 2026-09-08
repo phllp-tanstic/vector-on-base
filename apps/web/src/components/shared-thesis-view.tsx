@@ -53,6 +53,22 @@ export function SharedThesisView({
           recipient independently authorizes any execution.
         </span>
       </div>
+      <div className="shared-flow" aria-label="Shared thesis adaptation sequence">
+        <div>
+          <span>01 · Original thesis</span>
+          <strong>${payload.requestedPositionUsd} requested</strong>
+        </div>
+        <b aria-hidden="true">→</b>
+        <div>
+          <span>02 · Adapt to my portfolio</span>
+          <strong>Run deterministic constraints</strong>
+        </div>
+        <b aria-hidden="true">→</b>
+        <div>
+          <span>03 · New user-specific size</span>
+          <strong>Creator size is not inherited</strong>
+        </div>
+      </div>
       <dl className="shared-details">
         <dt>Creator</dt>
         <dd>
