@@ -11,6 +11,7 @@ import {
 import {
   OPEN_SHARED_VIEW_LABEL,
   attemptThesisShareLink,
+  attemptWorkingThesisShareLink,
   copyThesisShareLink,
   openSharedViewLinkProps,
   shareButtonLabel,
@@ -57,6 +58,56 @@ function fallbackEnvironment(copyResult: boolean) {
 }
 
 describe("thesis share UX", () => {
+  it("shares an unsaved current thesis through the canonical public URL", async () => {
+    const working = interpretDemoThesis(DEFAULT_DEMO_THESIS, NOW);
+    let copiedUrl = "";
+    const result = await attemptWorkingThesisShareLink(
+      working,
+      CREATOR,
+      "https://vector.example",
+      undefined,
+      { clipboard: { writeText: async (value) => void (copiedUrl = value) } },
+    );
+    assert.equal(result.state, "copied");
+    assert.match(copiedUrl, /^https:\/\/vector\.example\/share\?thesis=/u);
+    const encoded = new URL(copiedUrl).searchParams.get("thesis");
+    assert.ok(encoded);
+    assert.deepEqual(
+      decodeSharePayload(encoded),
+      toPublicThesisPayload(await persistedFromWorkingThesis(working, CREATOR, undefined, NOW)),
+    );
+  });
+
+  it("produces the same public payload before and after saving identical thesis content", async () => {
+    const working = interpretDemoThesis(DEFAULT_DEMO_THESIS, NOW);
+    const saved = await persistedFromWorkingThesis(working, CREATOR, undefined, NOW);
+    const environment = {};
+    const unsaved = await attemptWorkingThesisShareLink(
+      working,
+      CREATOR,
+      "https://vector.example",
+      undefined,
+      environment,
+    );
+    const persisted = await attemptWorkingThesisShareLink(
+      working,
+      CREATOR,
+      "https://vector.example",
+      saved,
+      environment,
+    );
+    assert.equal(unsaved.state, "failed");
+    assert.equal(persisted.state, "failed");
+    if (unsaved.state !== "failed" || persisted.state !== "failed") return;
+    const unsavedPayload = decodeSharePayload(
+      new URL(unsaved.url).searchParams.get("thesis") ?? "",
+    );
+    const persistedPayload = decodeSharePayload(
+      new URL(persisted.url).searchParams.get("thesis") ?? "",
+    );
+    assert.deepEqual(unsavedPayload, persistedPayload);
+  });
+
   it("generates the canonical origin share URL and round trips through the public route payload", async () => {
     const thesis = await fixture();
     let copiedUrl = "";

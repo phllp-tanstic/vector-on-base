@@ -1736,6 +1736,11 @@ dt {
   padding: 0 10px;
   font-size: 0.7rem;
 }
+.library-list article.highlighted,
+.library-list article:focus {
+  outline: 2px solid var(--vector-lime);
+  outline-offset: 3px;
+}
 @media (hover: hover) {
   .share-fallback-link:hover {
     border-color: var(--vector-lime);

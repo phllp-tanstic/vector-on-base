@@ -17,6 +17,7 @@ import {
   fingerprintPublicThesis,
   persistedFromWorkingThesis,
   resetLocalDemoProductState,
+  saveWorkingThesis,
   toPublicThesisPayload,
   validatePublicThesisPayload,
   workingThesisFromPublic,
@@ -50,6 +51,21 @@ async function fixture() {
 }
 
 describe("persisted executable theses", () => {
+  it("saves a working thesis through the repository and updates the same identity without duplicates", async () => {
+    const repository = new LocalExecutableThesisRepository(new MemoryStorage());
+    const working = interpretDemoThesis(DEFAULT_DEMO_THESIS, NOW);
+    const saved = await saveWorkingThesis(repository, working, CREATOR, NOW);
+    assert.equal(saved.id, working.id);
+    assert.equal(repository.list().length, 1);
+
+    const edited = editThesisParameters(working, { requestedSizeUsd: 450 });
+    const updated = await saveWorkingThesis(repository, edited, CREATOR, NOW);
+    assert.equal(updated.id, saved.id);
+    assert.equal(updated.createdAt, saved.createdAt);
+    assert.equal(updated.requestedPositionUsd, 450);
+    assert.equal(repository.list().length, 1);
+  });
+
   it("saves, loads, updates, lists, and deletes through the repository boundary", async () => {
     const repository = new LocalExecutableThesisRepository(new MemoryStorage());
     const thesis = await fixture();

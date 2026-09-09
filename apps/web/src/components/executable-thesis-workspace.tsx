@@ -24,6 +24,7 @@ import {
   adaptPublicThesis,
   persistedFromWorkingThesis,
   resetLocalDemoProductState,
+  saveWorkingThesis,
   toPublicThesisPayload,
   workingThesisFromPublic,
   type PersistedExecutableThesis,
@@ -33,12 +34,18 @@ import {
 import {
   SHARE_FEEDBACK_DURATION_MS,
   attemptThesisShareLink,
+  attemptWorkingThesisShareLink,
   type ShareAttemptResult,
   type ShareCopyState,
 } from "../lib/thesis-share";
 import { BaseSepoliaTestSwapCard } from "./base-sepolia-test-swap-card";
 import { CopyableValue } from "./copyable-value";
-import { CurrentThesisActionRow, LibraryThesisActionRow } from "./share-action";
+import {
+  CurrentThesisActionRow,
+  LibraryThesisActionRow,
+  focusSavedThesis,
+  savedThesisElementId,
+} from "./share-action";
 import { SharedThesisView } from "./shared-thesis-view";
 
 const RECIPIENT_DEMO_PORTFOLIO = Object.freeze({
@@ -126,12 +133,14 @@ export function ExecutableThesisWorkspace({
   const [savedTheses, setSavedTheses] = useState<readonly PersistedExecutableThesis[]>([]);
   const [savedThesis, setSavedThesis] = useState<PersistedExecutableThesis>();
   const [savedMessage, setSavedMessage] = useState<string>();
+  const [highlightedThesisId, setHighlightedThesisId] = useState<string>();
   const [shareFeedback, setShareFeedback] = useState<{
     readonly target: string;
     readonly state: Exclude<ShareCopyState, "default">;
   }>();
   const [shareFallbackUrls, setShareFallbackUrls] = useState<Readonly<Record<string, string>>>({});
   const shareFeedbackTimer = useRef<number | undefined>(undefined);
+  const highlightTimer = useRef<number | undefined>(undefined);
   const [history, setHistory] = useState<readonly ThesisExecutionRecord[]>([]);
   const [isSharedAdapted, setIsSharedAdapted] = useState(false);
   const [persistenceError, setPersistenceError] = useState<string>();
@@ -149,9 +158,14 @@ export function ExecutableThesisWorkspace({
         : risk
           ? 2
           : 1;
+  const currentSavedThesis = thesis
+    ? savedThesis?.id === thesis.id
+      ? savedThesis
+      : savedTheses.find((item) => item.id === thesis.id)
+    : undefined;
   const receiptShareFallbackUrl = shareFallbackUrl("receipt");
-  const currentShareFallbackUrl = savedThesis
-    ? shareFallbackUrl(`current:${savedThesis.id}`)
+  const currentShareFallbackUrl = currentSavedThesis
+    ? shareFallbackUrl(`current:${currentSavedThesis.id}`)
     : undefined;
 
   useEffect(() => {
@@ -173,6 +187,7 @@ export function ExecutableThesisWorkspace({
       if (shareFeedbackTimer.current !== undefined) {
         window.clearTimeout(shareFeedbackTimer.current);
       }
+      if (highlightTimer.current !== undefined) window.clearTimeout(highlightTimer.current);
     },
     [],
   );
@@ -247,18 +262,16 @@ export function ExecutableThesisWorkspace({
     setHistory(executionRepository?.list() ?? []);
   }
 
-  async function saveThesis() {
+  async function saveThesis(feedback = "Saved · no quote or authorization was created") {
     if (!thesis) return;
     if (!repository) {
       setSavedMessage("Local saving is unavailable. Your current thesis remains open.");
       return;
     }
     try {
-      const persisted = await persistedFromWorkingThesis(thesis, smartAccountAddress, savedThesis);
-      if (savedThesis) repository.update(savedThesis.id, persisted);
-      else repository.save(persisted);
+      const persisted = await saveWorkingThesis(repository, thesis, smartAccountAddress);
       setSavedThesis(persisted);
-      setSavedMessage("Saved · no quote or authorization was created");
+      setSavedMessage(feedback);
       refreshLibrary();
     } catch {
       setSavedMessage("The thesis could not be saved locally. Your current thesis remains open.");
@@ -348,18 +361,28 @@ export function ExecutableThesisWorkspace({
   async function shareExecutedThesis() {
     if (!thesis) return;
     try {
-      const shareable =
-        savedThesis ?? (await persistedFromWorkingThesis(thesis, smartAccountAddress));
-      applyShareAttempt("receipt", await attemptThesisShareLink(shareable, window.location.origin));
+      const existing = currentSavedThesis ?? repository?.get(thesis.id);
+      applyShareAttempt(
+        "receipt",
+        await attemptWorkingThesisShareLink(
+          thesis,
+          smartAccountAddress,
+          window.location.origin,
+          existing,
+        ),
+      );
     } catch {
       applyShareAttempt("receipt", { state: "unavailable" });
     }
   }
 
-  function viewMyTheses() {
-    const library = document.querySelector<HTMLElement>("#my-theses");
-    library?.scrollIntoView({ behavior: "smooth", block: "start" });
-    library?.focus({ preventScroll: true });
+  function viewMyTheses(item: PersistedExecutableThesis) {
+    setHighlightedThesisId(item.id);
+    focusSavedThesis(document, item.id);
+    if (highlightTimer.current !== undefined) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => {
+      setHighlightedThesisId((current) => (current === item.id ? undefined : current));
+    }, 1_800);
   }
 
   function adaptShared() {
@@ -469,7 +492,12 @@ export function ExecutableThesisWorkspace({
                 const shareTarget = `library:${item.id}`;
                 const fallbackUrl = shareFallbackUrl(shareTarget);
                 return (
-                  <article key={item.id}>
+                  <article
+                    className={highlightedThesisId === item.id ? "highlighted" : undefined}
+                    id={savedThesisElementId(item.id)}
+                    key={item.id}
+                    tabIndex={-1}
+                  >
                     <div>
                       <strong>{item.asset}</strong>
                       <p>{item.thesisText}</p>
@@ -750,8 +778,15 @@ export function ExecutableThesisWorkspace({
               smartAccount={smartAccount}
               thesis={thesis}
               risk={risk!}
+              {...(currentSavedThesis
+                ? {
+                    onViewMyTheses: () => viewMyTheses(currentSavedThesis),
+                  }
+                : {
+                    onSaveThesis: () => void saveThesis("Thesis saved"),
+                  })}
               onShareThesis={() => void shareExecutedThesis()}
-              onViewMyTheses={viewMyTheses}
+              {...(savedMessage === "Thesis saved" ? { saveFeedback: savedMessage } : {})}
               shareState={shareState("receipt")}
               {...(receiptShareFallbackUrl ? { shareFallbackUrl: receiptShareFallbackUrl } : {})}
             />

@@ -322,6 +322,25 @@ export async function persistedFromWorkingThesis(
   return { ...draft, fingerprint: await fingerprintPublicThesis(toPublicThesisPayload(draft)) };
 }
 
+/** Saves through the repository boundary while retaining an existing working-thesis identity. */
+export async function saveWorkingThesis(
+  repository: ExecutableThesisRepository,
+  thesis: ExecutableThesis,
+  creator: string,
+  now = new Date(),
+): Promise<PersistedExecutableThesis> {
+  const existing = repository.get(thesis.id);
+  const persisted = await persistedFromWorkingThesis(
+    thesis,
+    existing?.creator ?? creator,
+    existing,
+    now,
+  );
+  if (existing) repository.update(existing.id, persisted);
+  else repository.save(persisted);
+  return persisted;
+}
+
 export function workingThesisFromPublic(
   payload: PublicThesisPayload,
   id = payload.thesisId,

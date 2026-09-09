@@ -11,8 +11,10 @@ import {
 import { attemptThesisShareLink } from "../lib/thesis-share.ts";
 import {
   CurrentThesisActionRow,
+  focusSavedThesis,
   LibraryThesisActionRow,
   ReceiptShareActionRow,
+  savedThesisElementId,
 } from "./share-action.ts";
 
 const NOW = new Date("2026-09-02T12:00:00.000Z");
@@ -31,6 +33,7 @@ function renderShareActionRow(
   surface: "current" | "library" | "receipt",
   state: "default" | "failed" | "unavailable",
   fallbackUrl?: string,
+  receiptSaved = false,
 ) {
   const shared = { ...(fallbackUrl ? { fallbackUrl } : {}), state };
   const noop = () => undefined;
@@ -50,7 +53,11 @@ function renderShareActionRow(
             onOpen: noop,
             onShare: noop,
           })
-        : createElement(ReceiptShareActionRow, { ...shared, onShare: noop });
+        : createElement(ReceiptShareActionRow, {
+            ...shared,
+            ...(receiptSaved ? { onViewMyTheses: noop } : { onSave: noop }),
+            onShare: noop,
+          });
   return renderToStaticMarkup(component);
 }
 
@@ -61,6 +68,49 @@ async function failedShare() {
 }
 
 describe("rendered share actions", () => {
+  it("renders Save and Share, but not View, for an unsaved executed thesis", () => {
+    const markup = renderShareActionRow("receipt", "default");
+    assert.match(markup, /Save thesis.*Share thesis/u);
+    assert.doesNotMatch(markup, /View in My Theses/u);
+  });
+
+  it("renders Share and View, but not Save, for a saved executed thesis", () => {
+    const noop = () => undefined;
+    const markup = renderToStaticMarkup(
+      createElement(ReceiptShareActionRow, {
+        onShare: noop,
+        onViewMyTheses: noop,
+        saveFeedback: "Thesis saved",
+        state: "default",
+      }),
+    );
+    assert.match(markup, /Share thesis.*View in My Theses/u);
+    assert.doesNotMatch(markup, /Save thesis/u);
+    assert.match(markup, /role="status">Thesis saved/u);
+  });
+
+  it("targets and focuses the corresponding saved thesis", () => {
+    const calls: unknown[] = [];
+    const found = focusSavedThesis(
+      {
+        getElementById: (id) => {
+          calls.push(id);
+          return {
+            focus: (options) => calls.push(["focus", options]),
+            scrollIntoView: (options) => calls.push(["scroll", options]),
+          };
+        },
+      },
+      "thesis-7",
+    );
+    assert.equal(found, true);
+    assert.deepEqual(calls, [
+      savedThesisElementId("thesis-7"),
+      ["scroll", { behavior: "smooth", block: "center" }],
+      ["focus", { preventScroll: true }],
+    ]);
+  });
+
   it("renders Open shared view after clipboard failure in the current thesis action row", async () => {
     const result = await failedShare();
     const markup = renderShareActionRow("current", result.state, result.url);

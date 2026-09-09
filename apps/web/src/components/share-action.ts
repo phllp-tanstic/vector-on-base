@@ -9,6 +9,27 @@ import {
 
 export type ShareActionSurface = "current" | "library" | "receipt";
 
+export interface FocusableThesisElement {
+  focus(options?: { preventScroll?: boolean }): void;
+  scrollIntoView(options?: { behavior?: "smooth"; block?: "center" | "start" }): void;
+}
+
+export interface ThesisDocument {
+  getElementById(id: string): FocusableThesisElement | null;
+}
+
+export function savedThesisElementId(thesisId: string): string {
+  return `saved-thesis-${thesisId}`;
+}
+
+export function focusSavedThesis(document: ThesisDocument, thesisId: string): boolean {
+  const item = document.getElementById(savedThesisElementId(thesisId));
+  if (!item) return false;
+  item.scrollIntoView({ behavior: "smooth", block: "center" });
+  item.focus({ preventScroll: true });
+  return true;
+}
+
 export function ShareAction({
   fallbackUrl,
   onShare,
@@ -118,32 +139,48 @@ export function LibraryThesisActionRow({
 
 export function ReceiptShareActionRow({
   fallbackUrl,
+  onSave,
   onShare,
   onViewMyTheses,
+  saveFeedback,
   state,
 }: Readonly<{
   fallbackUrl?: string;
+  onSave?: () => void;
   onShare?: () => void;
   onViewMyTheses?: () => void;
+  saveFeedback?: string;
   state: ShareCopyState;
 }>) {
   return createElement(
-    "div",
-    { "aria-label": "Executed thesis actions", className: "receipt-actions" },
-    createElement(ShareAction, {
-      ...(fallbackUrl ? { fallbackUrl } : {}),
-      ...(onShare ? { onShare } : {}),
-      state,
-      surface: "receipt",
-    }),
+    Fragment,
+    null,
     createElement(
-      "button",
-      {
-        className: "secondary",
-        ...(onViewMyTheses ? { onClick: onViewMyTheses } : {}),
-        type: "button",
-      },
-      "View in My Theses",
+      "div",
+      { "aria-label": "Executed thesis actions", className: "receipt-actions" },
+      onSave
+        ? createElement(
+            "button",
+            { className: "secondary", onClick: onSave, type: "button" },
+            "Save thesis",
+          )
+        : null,
+      createElement(ShareAction, {
+        ...(fallbackUrl ? { fallbackUrl } : {}),
+        ...(onShare ? { onShare } : {}),
+        state,
+        surface: "receipt",
+      }),
+      onViewMyTheses
+        ? createElement(
+            "button",
+            { className: "secondary", onClick: onViewMyTheses, type: "button" },
+            "View in My Theses",
+          )
+        : null,
     ),
+    saveFeedback
+      ? createElement("p", { className: "saved-message", role: "status" }, saveFeedback)
+      : null,
   );
 }

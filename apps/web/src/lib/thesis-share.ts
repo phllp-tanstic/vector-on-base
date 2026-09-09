@@ -1,4 +1,9 @@
-import { createShareUrl, type PersistedExecutableThesis } from "./persisted-thesis.ts";
+import type { ExecutableThesis } from "./executable-thesis.ts";
+import {
+  createShareUrl,
+  persistedFromWorkingThesis,
+  type PersistedExecutableThesis,
+} from "./persisted-thesis.ts";
 
 export type ShareCopyState = "default" | "copied" | "failed" | "unavailable";
 export type ShareButtonContext = "library" | "receipt";
@@ -132,6 +137,26 @@ export async function attemptThesisShareLink(
   try {
     const result = await copyThesisShareLink(thesis, origin, environment);
     return result.copied ? { state: "copied" } : { state: "failed", url: result.url };
+  } catch {
+    return { state: "unavailable" };
+  }
+}
+
+/** Adapts the open working thesis into the one canonical public-share path without saving it. */
+export async function attemptWorkingThesisShareLink(
+  thesis: ExecutableThesis,
+  creator: string,
+  origin: string,
+  existing?: PersistedExecutableThesis,
+  environment?: ShareClipboardEnvironment,
+): Promise<ShareAttemptResult> {
+  try {
+    const shareable = await persistedFromWorkingThesis(
+      thesis,
+      existing?.creator ?? creator,
+      existing,
+    );
+    return await attemptThesisShareLink(shareable, origin, environment);
   } catch {
     return { state: "unavailable" };
   }

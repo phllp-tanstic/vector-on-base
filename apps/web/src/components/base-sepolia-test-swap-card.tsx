@@ -51,8 +51,10 @@ export function BaseSepoliaTestSwapCard({
   risk,
   onStatusChange,
   onConfirmedExecution,
+  onSaveThesis,
   onShareThesis,
   onViewMyTheses,
+  saveFeedback,
   shareState,
   shareFallbackUrl,
 }: Readonly<{
@@ -61,8 +63,10 @@ export function BaseSepoliaTestSwapCard({
   risk: ThesisRiskResult;
   onStatusChange: (status: ThesisStatus) => void;
   onConfirmedExecution?: (record: Omit<ThesisExecutionRecord, "thesisId">) => void;
+  onSaveThesis?: () => void;
   onShareThesis?: () => void;
   onViewMyTheses?: () => void;
+  saveFeedback?: string;
   shareState: ShareCopyState;
   shareFallbackUrl?: string;
 }>) {
@@ -533,8 +537,10 @@ export function BaseSepoliaTestSwapCard({
             </div>
             <ReceiptShareActionRow
               {...(shareFallbackUrl ? { fallbackUrl: shareFallbackUrl } : {})}
+              {...(onSaveThesis ? { onSave: onSaveThesis } : {})}
               {...(onShareThesis ? { onShare: onShareThesis } : {})}
               {...(onViewMyTheses ? { onViewMyTheses } : {})}
+              {...(saveFeedback ? { saveFeedback } : {})}
               state={shareState}
             />
           </div>
