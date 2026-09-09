@@ -141,10 +141,10 @@ independently; a recipient can be blocked even when the creator was accepted.
 
 ### Does AI decide trades?
 
-No. Interpretation can structure what the user means, but deterministic code controls portfolio
-adaptation, risk checks, and execution-package construction. AI has no signing key and cannot
-bypass the Smart Account or `VectorExecutor` constraints; the current demo interpreter is itself a
-deterministic NVDA-specific grammar.
+No. Groq structures the user's NVDA thesis into a strict, bounded schema, but deterministic code
+controls portfolio adaptation, risk checks, and execution-package construction. The server-side API
+key has no signing authority, and AI cannot bypass the Smart Account or `VectorExecutor`
+constraints.
 
 ### Does Vector custody user funds?
 

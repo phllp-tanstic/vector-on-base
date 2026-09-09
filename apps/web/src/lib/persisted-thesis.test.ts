@@ -66,6 +66,19 @@ describe("persisted executable theses", () => {
     assert.equal(repository.list().length, 1);
   });
 
+  it("preserves confirmed execution when a thesis is saved for the first time from its receipt", async () => {
+    const repository = new LocalExecutableThesisRepository(new MemoryStorage());
+    const working = {
+      ...interpretDemoThesis(DEFAULT_DEMO_THESIS, NOW),
+      status: "EXECUTED" as const,
+    };
+
+    const saved = await saveWorkingThesis(repository, working, CREATOR, NOW);
+
+    assert.equal(saved.status, "EXECUTED");
+    assert.equal(repository.get(working.id)?.status, "EXECUTED");
+  });
+
   it("saves, loads, updates, lists, and deletes through the repository boundary", async () => {
     const repository = new LocalExecutableThesisRepository(new MemoryStorage());
     const thesis = await fixture();

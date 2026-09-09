@@ -297,6 +297,12 @@ export async function persistedFromWorkingThesis(
   now = new Date(),
 ): Promise<PersistedExecutableThesis> {
   const timestamp = now.toISOString();
+  const status: PersistedThesisStatus =
+    thesis.status === "EXECUTED"
+      ? "EXECUTED"
+      : Date.parse(thesis.parameters.expiryIso) <= now.getTime()
+        ? "EXPIRED"
+        : "ACTIVE";
   const draft: PersistedExecutableThesis = {
     schema: EXECUTABLE_THESIS_SCHEMA,
     version: EXECUTABLE_THESIS_VERSION,
@@ -313,7 +319,7 @@ export async function persistedFromWorkingThesis(
     reserveRequirementUsd: thesis.parameters.reserveUsd,
     maxSlippageBps: Math.round(thesis.parameters.maxSlippagePercent * 100),
     expiry: thesis.parameters.expiryIso,
-    status: Date.parse(thesis.parameters.expiryIso) <= now.getTime() ? "EXPIRED" : "ACTIVE",
+    status,
     provenance: existing?.provenance ?? { kind: "ORIGINAL" },
     fingerprint: "",
   };

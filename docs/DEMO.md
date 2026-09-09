@@ -20,9 +20,8 @@ NVDA stock; it is only the isolated test settlement asset.
 Action: Point to the headline and the four-step strip.
 
 Say: “Vector turns a market thesis into a portfolio-aware, risk-constrained position that I can
-authorize on Base. The deterministic demo interpreter structures what I mean; deterministic code
-applies portfolio and risk rules; I authorize the final execution. A production AI interpreter may
-later operate within that non-authoritative interpretation boundary.”
+authorize on Base. Groq structures what I mean into a strict schema; deterministic code applies
+portfolio and risk rules; I authorize the final execution. The AI has no transaction authority.”
 
 Do not dwell on: protocol names, contract addresses, or production dependencies.
 
@@ -43,7 +42,7 @@ directly into execution.
 Action: Select **Run risk check**.
 
 Say: “I requested $500. The Demo Mode portfolio has $1,320 USDC, so deterministic reserve logic
-reduces the executable position to $320 to preserve $1,000. AI did not choose $320.”
+reduces the executable position to $320 to preserve $1,000. Groq did not choose $320.”
 
 Action: Select **Accept adaptation and continue**.
 

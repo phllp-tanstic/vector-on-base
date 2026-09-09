@@ -1,224 +1,307 @@
 # Vector on Base
 
-**Turn a market thesis into a portfolio-aware, risk-constrained position you can authorize on Base.**
+Vector on Base turns market theses into constrained token execution plans that users can authorize with Coinbase Smart Accounts on Base.
 
-Vector on Base is an intent execution layer for tokenized markets. Its core object is the
-**Executable Thesis**: portable market intent plus reusable constraints, with execution authority
-deliberately left out. AI interprets intent; deterministic code controls adaptation and execution;
-the user controls authorization through a Coinbase Smart Account.
+## Table of contents
 
-The product's social primitive is simple: **share the thesis, not the trade.** A recipient adapts
-the same thesis to their own portfolio, reruns risk, optionally forks it, and authorizes their own
-position.
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [API reference](#api-reference)
+- [Project structure](#project-structure)
+- [Testing and demo](#testing-and-demo)
+- [Deployment](#deployment)
+- [Current limitations](#current-limitations)
+- [Post-hackathon roadmap](#post-hackathon-roadmap)
+- [Troubleshooting and FAQ](#troubleshooting-and-faq)
+- [Contributing](#contributing)
+- [License](#license)
 
-## What works
+## Overview
 
-| Capability                                  | Status                       |
-| ------------------------------------------- | ---------------------------- |
-| Coinbase Smart Account authentication       | **LIVE**                     |
-| User-controlled Smart Account authorization | **PROVEN ON BASE SEPOLIA**   |
-| VectorExecutor                              | **DEPLOYED ON BASE SEPOLIA** |
-| Exact two-call approval and execution       | **PROVEN ON BASE SEPOLIA**   |
-| Deterministic portfolio and risk engine     | **COMPLETE**                 |
-| B20 amount handling and validation          | **COMPLETE**                 |
-| Executable Thesis browser-local persistence | **COMPLETE**                 |
-| Share / Adapt / Fork                        | **COMPLETE**                 |
-| 0x BStocks production routing               | **ACCESS PENDING**           |
-| Chainlink equity streams                    | **ACCESS PENDING**           |
-| Base Mainnet VectorExecutor                 | **NOT DEPLOYED**             |
+This repository is a hackathon MVP for expressing a market thesis, applying deterministic portfolio constraints, and preparing an exact two-call token execution. The browser demo uses NVDA as its current demonstration scenario, not as the limit of Vector's intended asset coverage. It uses Coinbase CDP email authentication and a user-controlled Smart Account on Base Sepolia. Production-oriented packages contain Base Mainnet asset, 0x, Chainlink, portfolio, risk, and execution-plan logic, but Base Mainnet execution is not deployed or enabled.
 
-Demo execution is clearly isolated: **BASE SEPOLIA · TEST ASSETS · NO REAL STOCKS**. A finite
-testnet-only faucet lets public testers explicitly claim 10 mUSDC from their own Smart Account,
-subject to a 24-hour per-address cooldown; the token has no monetary value and the faucet has no
-Base Mainnet role.
+An Executable Thesis contains portable intent and constraints. It does not contain a wallet authorization, quote, nonce, calldata, allowance, risk acceptance, or receipt. Shared theses are adapted against the recipient's portfolio instead of copying the creator's execution state.
 
-## Run locally
+## Architecture
 
-Prerequisites: Node.js 24+, npm, and [Foundry](https://book.getfoundry.sh/getting-started/installation)
-for the local contract E2E verifier.
+```mermaid
+flowchart LR
+    Browser[Next.js browser app]
+    CDP[Coinbase CDP]
+    Sepolia[Base Sepolia]
+    Packages[TypeScript domain packages]
+    Checks[Read-only verification scripts]
+    Mainnet[Base Mainnet RPC]
+    ZeroX[0x Swap API v2]
+    Chainlink[Chainlink Data Streams]
+    Executor[VectorExecutor]
+    Groq[Groq structured-output model]
+    IntentRoute[Server-side intent route]
+
+    Browser -->|email auth and UserOperation| CDP
+    Browser -->|market thesis| IntentRoute
+    IntentRoute -->|strict JSON schema| Groq
+    Browser -->|public reads and test settlement| Sepolia
+    Browser -->|risk package| Packages
+    Checks --> Packages
+    Checks --> Mainnet
+    Checks --> ZeroX
+    Checks --> Chainlink
+    CDP -->|user-authorized calls| Executor
+    Executor --> Sepolia
+```
+
+The main components are:
+
+- `apps/web`: Next.js App Router UI. It calls a server-side Groq intent interpreter, then provides browser-local thesis storage, share links, Coinbase CDP authentication, a Base Sepolia faucet, and a fixed test swap.
+- `packages/shared`: chain and asset types plus the asset registry.
+- `packages/b20`: B20 address validation and raw/economic amount conversion.
+- `packages/portfolio`: portfolio snapshots and fixed-point reference valuation.
+- `packages/risk`: deterministic validation of balance, reserve, exposure, trigger, deadline, quote, slippage, and policy constraints.
+- `packages/integrations`: Base RPC and asset adapters, Coinbase Smart Account call conversion, 0x client and target policy, and Chainlink Data Streams readers.
+- `packages/execution`: normalized quotes, provider-backed snapshots, canonical execution intents, two-call plans, and Base Mainnet readiness classification.
+- `contracts`: the non-upgradeable `VectorExecutor`, Base Sepolia-only fixtures, deployment scripts, unit tests, fuzz tests, and invariants.
+- `services/api`: command-line verification entry points. The only HTTP endpoint is the Next.js Groq interpretation route under `apps/web`.
+
+The web demo and production-oriented command-line path are separate. The web demo uses fixed Base Sepolia fixture contracts and deterministic portfolio values. The production readiness command uses Base Mainnet reads, 0x, and Chainlink, but never signs or submits a transaction.
+
+## Prerequisites
+
+- Node.js `>=24`, as declared in the root `package.json`.
+- npm with lockfile v3 support. The repository uses npm workspaces and `package-lock.json`; an exact npm version is not pinned.
+- Foundry for `forge`, `cast`, and `anvil` when building or testing Solidity or running the local E2E verifier. An exact Foundry version is not pinned.
+- Solidity `0.8.36` and Cancun EVM support, configured in `contracts/foundry.toml`. Foundry downloads the compiler when required.
+- A modern browser with Web Crypto, Web Storage, and standard Base64 APIs for the web app.
+- A Coinbase CDP project with email authentication and `http://localhost:3000` in its allowed origins for authenticated local use.
+- Base Sepolia ETH in the user's Smart Account if the testnet transaction is not sponsored.
+
+The external 0x and Chainlink credentials are needed only for their live, read-only verification commands. They are not needed for installation, unit tests, deterministic verification scripts, or the local Anvil E2E test.
+
+## Installation
+
+From a clean checkout:
 
 ```sh
-npm install
+git clone https://github.com/phllp-tanstic/vector-on-base.git
+cd vector-on-base
+npm ci
+cd contracts
+forge install OpenZeppelin/openzeppelin-contracts@v5.6.1 \
+  foundry-rs/forge-std@v1.16.1 --no-git
+cd ..
+```
+
+The Foundry dependency directories are intentionally ignored by Git, so the `forge install` step is required after a fresh clone before Solidity builds or `npm run verify:e2e`.
+
+## Configuration
+
+Copy the tracked server-side template when using the live verification commands:
+
+```sh
 cp .env.example .env
+```
+
+Only `verify:zerox`, `verify:reference-prices`, and `verify:mainnet-readiness` automatically load the root `.env`. Other commands read the current shell environment. Next.js loads browser-safe values from `apps/web/.env.local`.
+
+### Browser variables
+
+| Variable                                      | Required by           | Default or example                           | Description                                                                                                                         |
+| --------------------------------------------- | --------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_CDP_PROJECT_ID`                  | Authenticated web app | `your-cdp-project-id`                        | Public CDP project identifier. Configure the browser origin in the CDP Portal.                                                      |
+| `NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS` | Optional demo faucet  | `0x5c45ae224A1D2D4Aa850563c3F3fa9fB5B69aabF` | Currently configured public Base Sepolia faucet. The UI verifies bytecode and disables claims if the address is missing or invalid. |
+
+Do not put CDP API secrets, Wallet Secrets, deployer keys, or server credentials in a `NEXT_PUBLIC_*` variable.
+
+### AI interpreter variables
+
+| Variable       | Required by                   | Default or example   | Description                                                                |
+| -------------- | ----------------------------- | -------------------- | -------------------------------------------------------------------------- |
+| `GROQ_API_KEY` | `/api/interpret`              | No default           | Server-side Groq API key. Never expose it through a `NEXT_PUBLIC_*` value. |
+| `GROQ_MODEL`   | Optional interpreter override | `openai/gpt-oss-20b` | Groq model with strict Structured Outputs support.                         |
+
+### Base Mainnet and provider variables
+
+| Variable                             | Required by                                        | Default or example                           | Description                                                                                                                                |
+| ------------------------------------ | -------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BASE_RPC_URL`                       | Base read commands                                 | `https://mainnet.base.org`                   | Base Mainnet HTTP(S) RPC URL.                                                                                                              |
+| `ZEROX_API_KEY`                      | `verify:zerox`, mainnet readiness                  | No default                                   | Server-side 0x API key.                                                                                                                    |
+| `ZEROX_API_BASE_URL`                 | 0x client                                          | `https://api.0x.org`                         | Optional API base URL. HTTP is accepted only for loopback testing. This variable is recognized by code but is missing from `.env.example`. |
+| `CHAINLINK_DATA_STREAMS_API_KEY`     | Chainlink verification                             | No default                                   | Server-side Chainlink Data Streams API key.                                                                                                |
+| `CHAINLINK_DATA_STREAMS_USER_SECRET` | Chainlink verification                             | No default                                   | Server-side Chainlink Data Streams user secret.                                                                                            |
+| `VECTOR_EXECUTOR_ADDRESS`            | Production plan creation and readiness             | `0x1111111111111111111111111111111111111111` | Base Mainnet `VectorExecutor` address. No production executor is currently deployed.                                                       |
+| `VECTOR_VERIFY_TAKER`                | `verify:zerox`                                     | `0x2222222222222222222222222222222222222222` | Non-zero taker address used for the non-submitting quote request.                                                                          |
+| `VECTOR_VERIFY_SELL_USDC`            | `verify:zerox`                                     | `1000000`                                    | Positive raw USDC amount. The default is 1 USDC.                                                                                           |
+| `VECTOR_VERIFY_ACCOUNT`              | `verify:portfolio`                                 | Zero address                                 | Optional account for Base balance reads. This command does not automatically load `.env`.                                                  |
+| `VECTOR_MAINNET_SMART_ACCOUNT`       | Reference-price portfolio projection and readiness | `0x2222222222222222222222222222222222222222` | Optional for preliminary reads, but required for an account-bound canonical `READY` result.                                                |
+| `VECTOR_MAINNET_SELL_USDC`           | Mainnet readiness                                  | `1000000`                                    | Positive raw USDC sell amount.                                                                                                             |
+| `VECTOR_MAINNET_STOCK_SYMBOL`        | Mainnet readiness                                  | `NVDAc`                                      | Must resolve to an enabled stock in the verified registry.                                                                                 |
+| `VECTOR_MAINNET_STOCK_TOKEN_ADDRESS` | Mainnet readiness                                  | Registry address for the selected symbol     | Optional address pin. It cannot introduce an unregistered asset.                                                                           |
+
+The `VECTOR_VERIFY_ACCOUNT` and `VECTOR_MAINNET_*` variables are read by code but are not currently listed in `.env.example`.
+
+### Base Sepolia maintenance variables
+
+| Variable                                    | Required by                                 | Default or example                           | Description                                                                                                          |
+| ------------------------------------------- | ------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `BASE_SEPOLIA_RPC_URL`                      | Foundry deployment and maintenance commands | `https://sepolia.base.org`                   | Keep credential-bearing provider URLs server-side. Scripts receive this through `--rpc-url`.                         |
+| `VECTOR_OWNER_ADDRESS`                      | `DeployVectorExecutor.s.sol`                | `0x3333333333333333333333333333333333333333` | Initial `VectorExecutor` owner.                                                                                      |
+| `VECTOR_EXECUTOR_ADDRESS_SEPOLIA`           | Environment template only                   | `0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE` | The current Solidity scripts do not read this variable. `ConfigureBaseSepoliaFixtures` pins this executor in source. |
+| `VECTOR_TEST_MOCK_USDC_ADDRESS`             | Configure, faucet deploy, and mint scripts  | `0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9` | Base Sepolia-only mock USDC contract.                                                                                |
+| `VECTOR_TEST_MOCK_B20_LIKE_TOKEN_ADDRESS`   | Configure script                            | `0x7d8D51976eB74A7949116732521e48B08d0c92Fd` | Base Sepolia-only mock B20-like token.                                                                               |
+| `VECTOR_TEST_MOCK_EXECUTION_ROUTER_ADDRESS` | Configure script                            | `0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB` | Base Sepolia-only deterministic router.                                                                              |
+| `VECTOR_TEST_SMART_ACCOUNT`                 | Mint script                                 | User Smart Account address                   | Recipient of the maintenance mint.                                                                                   |
+| `VECTOR_TEST_MOCK_USDC_MINT_AMOUNT`         | Mint script                                 | `10000000`                                   | Raw 6-decimal mock USDC units. The script rejects zero and values above `100000000`.                                 |
+
+Deployment keys are not environment variables in this repository. Foundry scripts use an encrypted keystore account supplied with `--account`, and broadcasting requires an explicit `--broadcast` flag. See `docs/BASE_SEPOLIA.md` for the simulate-first procedure.
+
+## Usage
+
+### Minimal deterministic check
+
+This command uses local fixtures and makes no network request:
+
+```sh
+npm run verify:risk
+```
+
+Expected output includes:
+
+```text
+Risk verification uses deterministic reference-price and 0x quote fixtures; not live prices.
+SCENARIO_A_ACCEPTED_NVDA.status=ACCEPTED
+SCENARIO_A_ACCEPTED_NVDA.nextState=READY_FOR_AUTHORIZATION
+SCENARIO_B_RESERVE_REJECTION.rejections=RESERVE_VIOLATION
+SCENARIO_C_EXPOSURE_REJECTION.rejections=EXPOSURE_LIMIT
+authorizationPerformed=false
+transactionSubmitted=false
+```
+
+### Run the web app
+
+Create the web environment file, set `GROQ_API_KEY` and `NEXT_PUBLIC_CDP_PROJECT_ID`, and optionally set `NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS`:
+
+```sh
+cp apps/web/.env.example apps/web/.env.local
+```
+
+Then run:
+
+```sh
 npm run dev --workspace apps/web
 ```
 
-Set the browser-safe `NEXT_PUBLIC_CDP_PROJECT_ID` in `apps/web/.env.local`, then open
-`http://localhost:3000`. Keep `ZEROX_API_KEY`, `CHAINLINK_DATA_STREAMS_API_KEY`, and
-`CHAINLINK_DATA_STREAMS_USER_SECRET` server-only in the ignored root `.env`. Deployer/admin keys
-must never be stored in the repository or environment files; deployment scripts use an encrypted
-Foundry keystore. See [Base Sepolia setup](docs/BASE_SEPOLIA.md) for the optional live testnet demo.
+Open `http://localhost:3000` for the landing page or `http://localhost:3000/app` for the application. Without a valid CDP project ID and allowed origin, the app renders a configuration error instead of enabling sign-in.
 
-## What Vector does
+The implemented demo flow is:
 
-1. The user expresses a market thesis.
-2. Vector structures it as an Executable Thesis.
-3. Deterministic code adapts the requested position to that user's portfolio constraints.
-4. The user reviews the risk result and exact execution package.
-5. The user explicitly authorizes the two calls through a Coinbase Smart Account.
-6. `VectorExecutor` enforces settlement constraints around the external execution route.
+1. Sign in by email OTP and use or create a Coinbase Smart Account.
+2. Interpret the default NVDA thesis through the server-side Groq structured-output route.
+3. Run the risk check. The fixture request is $500 and the creator portfolio reduces it to $320.
+4. Save the thesis in browser local storage or copy its `/share?thesis=...` URL.
+5. Open the shared route, sign in as a recipient, and adapt it. The recipient fixture reduces the request to $180.
+6. Accept the risk result and prepare the fixed Base Sepolia execution preview.
+7. Separately authorize the two-call UserOperation if the Smart Account has at least 1 mUSDC.
 
-The current demo interpreter is a deterministic, NVDA-specific grammar; the architecture keeps
-interpretation outside the authority and settlement boundaries so a production AI interpreter
-cannot authorize or bypass execution checks.
+The testnet settlement always sells `1_000_000` raw mUSDC units and requires at least `100_000_000` raw NOTB20 units. It does not execute the displayed $320 or $180 portfolio amount.
 
-## Executable Thesis
+### Run the local execution E2E check
 
-A normal signal says: **“Buy NVDA.”**
+This starts a temporary loopback Anvil chain, deploys local contracts, executes the bounded two-call plan through a test harness, and stops Anvil:
 
-An Executable Thesis carries enough structured intent to be independently evaluated:
-
-- asset and entry condition;
-- requested position and maximum exposure;
-- reserve requirement and slippage bound;
-- expiry and application provenance.
-
-It never carries wallet authorization, a nonce, quote, calldata, token allowance, portfolio
-balance, or risk acceptance. Those values are private, time-sensitive, and user-specific.
-
-> Same thesis. Different portfolio. Different executable position.
-
-In the included demo, the creator requests **$500** and deterministic reserve logic adapts it to
-**$320**. A recipient opens the same thesis against a different portfolio and receives an
-independently computed **$180** position.
-
-### Why this is not copy trading
-
-Users share intent, not execution state. Recipient position sizing and risk are recomputed, the
-recipient can be blocked even when the creator was accepted, and authorization is always
-independent. A fork receives a new identity and application-level provenance; it does not inherit a
-quote, risk decision, nonce, allowance, or signature.
-
-## Architecture and trust boundaries
-
-```mermaid
-flowchart TD
-    U[User market thesis]
-
-    subgraph AIB[AI / interpretation boundary]
-      II[Intent Interpreter]
-      ET[Executable Thesis<br/>portable intent + constraints]
-      II --> ET
-    end
-
-    subgraph DET[Deterministic code boundary]
-      PE[Portfolio Engine]
-      RP[Coherent Reference Price Snapshot]
-      Q[0x Execution Quote]
-      RE[Deterministic Risk Engine]
-      CI[Canonical VectorExecutionIntent]
-      EP[VectorExecutionPlan<br/>exact ordered two-call package]
-      PE --> RP
-      RP --> RE
-      Q --> RE
-      RE --> CI --> EP
-    end
-
-    subgraph AUTH[User authorization boundary]
-      RV[User review]
-      SA[Coinbase Smart Account]
-      RV --> SA
-    end
-
-    subgraph SETTLE[Onchain settlement boundary]
-      VE[VectorExecutor]
-      BS[Base settlement]
-      VE --> BS
-    end
-
-    U --> II
-    ET --> PE
-    ET --> Q
-    EP --> RV
-    SA -->|explicit authorization| VE
+```sh
+npm run verify:e2e
 ```
 
-The reference snapshot values portfolio state and triggers; it is never replaced by a 0x execution
-quote. Risk acceptance ends at `READY_FOR_AUTHORIZATION`. The Smart Account—not AI or a Vector
-backend—is the transaction authority. `VectorExecutor` then enforces the owner, nonce, deadline,
-asset/target/spender policy, sell bound, and minimum received amount onchain.
+Expected output:
 
-### Share / Adapt / Fork
-
-```mermaid
-flowchart TD
-    C[Creator Executable Thesis]
-    P[Shared portable payload<br/>no execution authority]
-    R[Recipient portfolio]
-    E[Recipient risk evaluation]
-    F[Recipient fork<br/>new identity + provenance]
-    A[Independent Smart Account authorization]
-    C --> P --> R --> E --> F --> A
+```text
+Vector local execution E2E passed
+network=anvil
+authorizationMode=LOCAL_AUTHORIZATION_HARNESS
+riskStatus=ACCEPTED
+calls=2
+sellAmount=100000000000000000000
+minBuyAmount=110000000000000000000
+actualBuyAmount=120000000000000000000
+nonceConsumed=true
+allowanceCleared=true
+recipientReceived=true
+executorResidualSell=0
+executorResidualBuy=0
+failureScenarios=RISK_REJECTED,WRONG_OWNER,EXPIRED,REUSED_NONCE,BELOW_MINIMUM,UNAPPROVED_ROUTER,WRONG_QUOTE_TOKEN,EXCESS_APPROVAL_PREVENTED
+transactionSubmittedToBase=false
 ```
 
-## Base Sepolia execution proof
+## API reference
 
-The confirmed testnet receipt proves a Coinbase user-controlled Smart Account submitted the exact
-approval-then-execute batch, `VectorExecutor` settled through the deterministic fixture router, its
-temporary router allowance returned to zero, and the recipient received `100,000,000` raw NOTB20
-units. The receipt succeeded at Base Sepolia block `46,409,263`.
+### Web routes
 
-- VectorExecutor: [`0x6F6383…8b8EdE`](https://sepolia.basescan.org/address/0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE)
-- UserOperation: `0x586d7c51d1768c18b4fe742d91a38eede645ed388bb43645c54d3a67a1eaa1cb`
-- Transaction: [`0xb68a0b…175607d`](https://sepolia.basescan.org/tx/0xb68a0b23e4582471ce9a7a862a3e2db9aa41d0b7953d18ceb48427e0b717607d)
+| Route                       | Behavior                                                                                                   | Errors and constraints                                                                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                         | Static landing page.                                                                                       | No authenticated functionality.                                                                                                                               |
+| `/app`                      | CDP sign-in, Executable Thesis workflow, local persistence, Base Sepolia faucet, and fixed test execution. | Requires a valid public CDP project ID for sign-in. Transaction controls require a Smart Account.                                                             |
+| `/share?thesis=<base64url>` | Decodes and displays a version 1 public thesis, then permits recipient adaptation after sign-in.           | Rejects empty, malformed, oversized, unknown-field, unsupported-schema, and unsupported-version payloads. The encoded payload is limited to 6,000 characters. |
+| `POST /api/interpret`       | Sends an NVDA thesis to Groq from the server and returns schema-validated intent parameters.               | Requires `GROQ_API_KEY`; rejects oversized, malformed, unsupported-asset, rate-limited, provider-failed, and invalid-model responses.                         |
 
-**BASE SEPOLIA LIVE DEMO · TEST ASSETS · NO REAL STOCKS.** This is a fixed 1 mUSDC test settlement.
-It proves Smart Account authorization and `VectorExecutor` settlement invariants; it does not
-execute the displayed $320/$180 adapted dollar position or prove production stock liquidity. Full
-fixtures and evidence are in [docs/BASE_SEPOLIA.md](docs/BASE_SEPOLIA.md).
+The interpretation route cannot authorize, quote, or submit a transaction. All risk and execution boundaries remain deterministic and separate.
 
-## Production Mainnet path
+### TypeScript package entry points
 
-The production code already includes canonical Base USDC; a verified Coinbase Tokenized Stocks
-registry for `NVDAc`, `AAPLc`, `GOOGLc`, and `METAc`; B20 raw/economic amount conversion and live
-validation; 0x Swap API v2 exact-sell integration; a versioned trusted AllowanceHolder policy;
-target/spender and quote validation; a read-only mainnet readiness checker; and a Chainlink Data
-Streams V11 reference-price adapter with coherent snapshot binding.
+All workspace packages are private and export TypeScript source directly. They are intended for this monorepo, not as published npm packages.
 
-External access and credentials remain pending. Provider-backed readiness wiring, quote
-minimum/freshness hardening, production executor deployment/configuration, and operational controls
-must also be completed before Base Mainnet execution. The current gates are explicit:
+| Package                | Main entry points                                                                                                                                                    | Return or error behavior                                                                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@vector/shared`       | `parseVectorAsset`, `AssetRegistry`, `VECTOR_CHAIN_ID`                                                                                                               | Parses ERC-20/B20 assets and rejects invalid or duplicate registry entries with typed errors.                                                                                                                     |
+| `@vector/b20`          | `getB20Variant`, `assertB20AssetAddress`, `rawToUIAmount`, `uiToRawAmount`                                                                                           | Uses branded `bigint` amounts and throws typed errors for invalid addresses, amounts, or multipliers.                                                                                                             |
+| `@vector/portfolio`    | `createPortfolioSnapshot`, `createAssetPrice`, `valuePosition`, `valuePortfolio`, `valuePortfolioWithProvider`                                                       | Returns immutable snapshots and fixed-point values; throws `PortfolioDomainError` or `PortfolioValuationError` for invalid or incomplete inputs.                                                                  |
+| `@vector/risk`         | `validateExecutionCandidate(candidate, registry)`                                                                                                                    | Returns `RiskValidationResult` with ordered checks and accumulated rejection codes. It does not authorize or submit.                                                                                              |
+| `@vector/execution`    | `buildVectorExecutionIntent`, `buildVectorExecutionPlan`, `encodeVectorExecutionIntent`, `checkBaseMainnetExecutionReadiness`                                        | Builds a Base Mainnet-only intent and exact approval-plus-execute plan. Invalid risk, chain, asset, quote, target, amount, nonce, or deadline inputs throw typed validation errors or produce a non-ready report. |
+| `@vector/integrations` | `createBasePublicClient`, `verifyB20Asset`, `createZeroXSwapClient`, `captureChainlinkReferencePriceSnapshot`, `buildSmartAccountCalls`, `sendSmartAccountExecution` | Encapsulates external reads and Smart Account conversion. `sendSmartAccountExecution` throws `SUBMISSION_DISABLED` unless `submissionEnabled: true` is explicitly supplied.                                       |
+| `@vector/intent`       | `interpretMarketThesisWithGroq`, `parseInterpretedMarketThesis`, `MARKET_THESIS_JSON_SCHEMA`                                                                         | Calls Groq with strict Structured Outputs and validates bounded intent fields. It has no portfolio, quote, wallet, or transaction authority.                                                                      |
 
-- **0x — ACCESS PENDING:** current production routing reports
-  `BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE`; tokenized-equity access/legal entitlement is pending.
-- **Chainlink — ACCESS PENDING:** server credentials and entitlement to the pinned equity streams
-  are pending.
-- **Base Mainnet — NOT DEPLOYED:** `VectorExecutor` is intentionally not deployed or configured for
-  production execution.
+### VectorExecutor contract
 
-`npm run verify:mainnet-readiness` is read-only and reports these states without deploying,
-signing, broadcasting, or submitting a UserOperation.
+`contracts/src/VectorExecutor.sol` exposes:
 
-## Security model
+- `execute(ExecutionIntent)`: pulls at most `sellAmount`, calls an approved target with approved allowance semantics, clears allowance, verifies sell and buy deltas, refunds unused sell/native value, and returns the execution ID plus actual amounts.
+- `cancelNonce(uint256)`: irreversibly consumes an unused nonce for the caller.
+- `hashExecutionIntent(ExecutionIntent)`: returns the domain-separated hash for the current chain and executor address.
+- Owner-only `setSupportedAsset`, `setExecutionTargetApproval`, and `setAllowanceTargetApproval` functions.
+- Public getters for supported assets, approved targets, used owner nonces, and inherited two-step ownership state.
 
-- Vector never owns user signing keys; the Coinbase Smart Account is the transaction authority.
-- The plan permits exactly two ordered calls and an exact executor approval—never an unlimited
-  allowance.
-- `VectorExecutor` enforces direct owner authorization, owner-scoped unordered nonces, and an
-  inclusive deadline.
-- Supported assets, execution targets, and allowance targets are independently allowlisted.
-- Temporary executor allowances are cleared; 0x Settler never receives ERC-20 approval.
-- Sell-token spend and recipient buy-token balance deltas are checked onchain.
-- V1 has no automatic, relayed, delegated, or background execution.
-- Risk is deterministic; AI cannot bypass policy or settlement constraints.
-- Shared theses contain no wallet, quote, nonce, calldata, allowance, or risk-acceptance state.
+`execute` reverts for a wrong caller, unsupported or identical assets, unapproved targets, an expired or reused nonce, zero bounds, an invalid recipient, incorrect native value, a failed router call, excessive sell spend, or insufficient recipient output. See `docs/SECURITY.md` for the complete trust model.
 
-See [docs/SECURITY.md](docs/SECURITY.md) for contract assumptions and administration risks.
+## Project structure
 
-## 60-second demo
+```text
+.
+├── apps/web/                  # Next.js browser application and web-focused tests
+├── contracts/
+│   ├── script/                # Base Sepolia deploy, configure, faucet, and mint scripts
+│   ├── src/                   # VectorExecutor and testnet-only fixture contracts
+│   └── test/                  # Solidity unit, fuzz, fixture, and invariant tests
+├── docs/                      # Architecture, security, demo, and deployment notes
+├── packages/
+│   ├── b20/                   # B20 identity and amount handling
+│   ├── execution/             # Quotes, intents, plans, snapshots, and readiness
+│   ├── integrations/          # Base, Coinbase, Chainlink, 0x, and executor config
+│   ├── intent/                # Groq structured-output intent interpreter
+│   ├── portfolio/             # Portfolio models and valuation
+│   ├── risk/                  # Deterministic risk checks
+│   └── shared/                # Shared chain and asset types
+├── services/api/              # Executable verification scripts, not an HTTP server
+├── .env.example               # Server and public environment template
+├── package.json               # npm workspaces and root commands
+└── package-lock.json          # npm lockfile v3
+```
 
-The full judge runbook is [docs/DEMO.md](docs/DEMO.md). The condensed path is:
+## Testing and demo
 
-1. Enter the NVDA thesis.
-2. Show the creator adjustment: **$500 → $320**.
-3. Save and share the thesis.
-4. Open it in the recipient context.
-5. Adapt it to the recipient portfolio: **$180**.
-6. Fork and inspect provenance.
-7. Show the exact two-call authorization preview.
-8. Show the confirmed Base Sepolia receipt.
-
-## Verification
+Run the JavaScript and TypeScript checks from the repository root:
 
 ```sh
 npm run typecheck
@@ -226,52 +309,111 @@ npm test
 npm run lint
 npm run format:check
 npm run build --workspace apps/web
-npm run verify:e2e
-npm run verify:zerox
-npm run verify:reference-prices
-npm run verify:mainnet-readiness
 ```
 
-The first six commands need no production credentials; `verify:e2e` runs only against a fresh local
-Anvil chain. `verify:zerox` needs `ZEROX_API_KEY` plus `VECTOR_VERIFY_TAKER` and makes no trade.
-`verify:reference-prices` needs both server-only Chainlink credentials.
-`verify:mainnet-readiness` may require the 0x and Chainlink credentials plus a configured deployed
-Mainnet executor; it is still strictly read-only. Access restrictions are reported as
-**ACCESS PENDING**, not as broken functionality.
+Run Solidity tests from the Foundry project:
 
-## Repository map
+```sh
+cd contracts
+forge test
+```
 
-| Path                    | Responsibility                                                                                           |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- |
-| `apps/web`              | Next.js demo, CDP authentication/authorization, thesis UI, local persistence, sharing, and Sepolia proof |
-| `services/api`          | Read-only verification entry points for authorization, E2E, 0x, reference prices, risk, and readiness    |
-| `services/watcher`      | Reserved service boundary; no watcher behavior is implemented in V1                                      |
-| `packages/intent`       | Reserved production intent-interpreter package; current demo grammar lives in `apps/web`                 |
-| `packages/portfolio`    | Typed balances, B20-aware valuation, portfolio snapshots, and reference-price interfaces                 |
-| `packages/risk`         | Pure deterministic checks for balance, reserve, exposure, trigger, deadline, quote, and policy           |
-| `packages/execution`    | Canonical execution intent, exact two-call plan, quote validation, and readiness classification          |
-| `packages/b20`          | B20 address types and exact raw/economic amount conversion                                               |
-| `packages/integrations` | Base registry/RPC, B20 verification, Coinbase boundary, Chainlink adapter, and 0x client/policy          |
-| `contracts`             | Non-upgradeable `VectorExecutor`, Foundry tests, scripts, and isolated Sepolia fixtures                  |
-| `docs`                  | Architecture, security, access-gate, demo, testnet, thesis, and submission evidence                      |
+At the time this README was written, `npm test` passes 207 tests across 30 suites, and `forge test` passes 51 tests across four suites. The Solidity suite uses 256 fuzz runs and 128 invariant runs as configured in `contracts/foundry.toml`.
 
-## Technical highlights
+Coverage includes schema and asset validation, B20 conversion, fixed-point valuation, deterministic risk, 0x response validation and target policy, Chainlink report and snapshot validation, execution-plan encoding, Coinbase call boundaries, thesis persistence/sharing, browser action rendering, faucet rules, fixed test-swap preparation, Solidity settlement behavior, fuzzed boundaries, and contract invariants.
 
-- Portable, machine-readable Executable Thesis with authority excluded by schema.
-- Deterministic portfolio-specific adaptation of the same shared intent.
-- Explicit separation of interpretation, deterministic validation, authorization, and settlement.
-- B20 economic/raw amount handling that keeps valuation units out of swap calldata.
-- Versioned trusted 0x AllowanceHolder policy with separate target and spender validation.
-- User-controlled Coinbase Smart Account authorization with an exact two-call batch.
-- Owner-scoped unordered execution nonces and reference-price snapshot binding.
-- Application provenance for independent forks and confirmed live Sepolia settlement.
+The automated tests do not exercise live email delivery, an actual CDP confirmation dialog, Vercel project settings, live 0x/Chainlink entitlement, or a Base Mainnet transaction. `npm run verify:zerox`, `npm run verify:reference-prices`, `npm run verify:portfolio`, `npm run verify:base`, and `npm run verify:mainnet-readiness` are separate read-only integration checks and may require network access or credentials.
 
-## Current scope and access gates
+The judge-oriented browser walkthrough is in `docs/DEMO.md`. Base Sepolia contract addresses, the faucet procedure, and the recorded successful receipt are in `docs/BASE_SEPOLIA.md`.
 
-Base Mainnet execution is intentionally gated. External 0x BStocks access and Chainlink credentials
-remain pending. Provider-backed readiness wiring, quote minimum/freshness hardening, production
-executor deployment/configuration, and operational controls must also be completed. Persistence is
-browser-local, provenance is application-level rather than onchain-attested, and Demo Mode uses
-isolated Sepolia test assets. These are the current V1 scope and access boundaries.
+## Deployment
 
-Reusable submission copy and judge FAQ: [docs/SUBMISSION.md](docs/SUBMISSION.md).
+The current public web deployment is [https://vector-on-base.vercel.app](https://vector-on-base.vercel.app). The Vercel project is connected to the GitHub repository, and pushes to `main` currently trigger a production deployment. The repository has no `vercel.json`, Dockerfile, GitHub Actions workflow, or version-controlled Vercel project metadata.
+
+Vercel must run the web workspace build:
+
+```sh
+npm run build --workspace apps/web
+```
+
+The production project needs `NEXT_PUBLIC_CDP_PROJECT_ID` and server-only `GROQ_API_KEY`. It needs `NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS` only when the public faucet should be enabled. The CDP project must allow the production origin.
+
+<!-- VERIFY: Record the Vercel Root Directory, install command, Node.js setting, and production branch from the Vercel dashboard. These settings are external to this repository. -->
+
+Solidity deployment is separate from web deployment. The existing browser demo pins already-deployed Base Sepolia fixture addresses. All Foundry scripts reject non-Sepolia chain ID `84532`, use an encrypted keystore selected with `--account`, and require `--broadcast` before changing chain state. Follow `docs/BASE_SEPOLIA.md`; do not deploy or reconfigure contracts as part of a normal web release.
+
+## Current limitations
+
+- The Groq AI interpreter is implemented, but the current browser and schema remain constrained to the NVDA hackathon scenario.
+- Browser portfolio values and the $500 to $320 or $180 adaptations are labelled fixtures, not live account valuations.
+- Base Sepolia execution uses mock mUSDC, a mock B20-like token, and a deterministic router. These assets have no monetary value and are excluded from the Base Mainnet registry.
+- The fixed 1 mUSDC test settlement is independent of the displayed adapted dollar amount.
+- Saved theses and confirmed receipts use origin-scoped browser `localStorage`. There is no hosted sync, account recovery, or cross-device library.
+- Share URLs are public bearer data. Their fingerprint is a SHA-256 content identifier, not a signature or onchain attestation.
+- Groq interpretation requires a separately managed API key and is subject to provider availability and rate limits. Broader multi-asset interpretation remains future work.
+- The repository contains read-only Base Mainnet integration and readiness logic, but no production executor deployment and no Base Mainnet submission UI.
+- 0x BStocks access and legal/account entitlement are pending. Known access restrictions are reported rather than bypassed.
+- Chainlink Data Streams credentials and subscription entitlement are pending.
+- Custom CDP paymaster sponsorship, Spend Permissions, relaying, delegated execution, background execution, and automatic execution are not implemented.
+- Beyond the bounded Groq interpretation route, no database, watcher, monitoring service, or production operations layer is implemented.
+
+## Post-hackathon roadmap
+
+Before a Base Mainnet deployment:
+
+1. Obtain and verify 0x BStocks account and legal entitlement for the registered assets.
+2. Obtain Chainlink Data Streams credentials and entitlement for the pinned equity feeds.
+3. Wire provider-backed portfolio valuation and one coherent reference snapshot into the user-facing execution flow.
+4. Complete quote freshness, minimum-output, simulation, and executor-funding checks without treating a 0x quote as an independent reference price.
+5. Review and deploy `VectorExecutor` on Base Mainnet, configure supported assets and both target allowlists, and transfer ownership to an appropriate multisig or governance process.
+6. Add production monitoring for executor ownership, allowlist changes, provider failures, quote failures, nonce use, and settlement events.
+7. Add durable thesis storage only after defining authentication, privacy, retention, migration, and provenance rules.
+8. Run an external security review and a user-controlled Smart Account mainnet rehearsal before enabling transaction submission.
+
+`npm run verify:mainnet-readiness` must remain read-only. A `READY` result means the checked inputs can produce a canonical in-memory plan at that moment; it does not mean a user authorized, simulated, submitted, or mined a trade.
+
+## Troubleshooting and FAQ
+
+### Why does sign-in say the site configuration is invalid?
+
+Confirm that `NEXT_PUBLIC_CDP_PROJECT_ID` is set in `apps/web/.env.local` and that the exact local or production origin is allowed in the CDP Portal. Restart or redeploy after changing a `NEXT_PUBLIC_*` value because it is embedded in the browser bundle.
+
+### Why is local saving unavailable?
+
+The MVP uses browser `localStorage`. Private browsing modes, storage policies, or disabled site storage can prevent persistence. The open thesis remains usable for the current page session, but it will not be stored.
+
+### Why did copying a share link fail?
+
+Clipboard access can be denied by browser policy. After a canonical URL is generated, the UI falls back to a temporary text selection and, if copying still fails, renders an `Open shared view` link. `Share link unavailable` instead indicates payload validation or URL generation failure.
+
+### Why is a shared link rejected?
+
+The `/share` decoder accepts only schema `vector.executable-thesis`, version `1`, the Base64URL alphabet, the exact public field set, and a payload no longer than 6,000 encoded characters. Truncated, edited, older, or unsupported links are rejected without importing state.
+
+### Why does `npm run verify:e2e` fail before starting Anvil?
+
+Confirm that `forge` and `anvil` are on `PATH`, then install the pinned Foundry libraries from the Installation section. The command builds Solidity artifacts before starting its temporary loopback chain.
+
+### Why does mainnet readiness exit with status 1?
+
+The command exits non-zero for every state other than `READY`. Missing executor deployment, credentials, provider snapshots, account context, asset support, target approval, balance, or 0x/Chainlink entitlement are expected classified failures. Read `state=`, `message=`, and each `check.<name>=` line instead of treating every non-zero exit as the same error.
+
+### Why does `.env` not affect `verify:portfolio` or `verify:base`?
+
+Those package scripts do not use Node's `--env-file-if-exists` flag. Export their variables in the current shell, or prefix the command with the required non-secret value. The three scripts that load `.env` are listed in the Configuration section.
+
+## Contributing
+
+The repository has no root `CONTRIBUTING.md` and no automated CI workflow. Before opening a pull request:
+
+1. Open an issue or describe the behavior, trust-boundary impact, and intended network scope in the pull request.
+2. Keep Base Sepolia fixtures out of the Base Mainnet registry and keep secrets out of source, browser variables, logs, and test fixtures.
+3. Add or update tests for behavior changes.
+4. Run the TypeScript, test, lint, formatting, web build, and Solidity commands from the Testing section.
+5. Document any new environment variable, external permission, contract deployment, or user-authorized side effect.
+
+Changes to the 0x trusted contract manifest, asset registry, executor allowlists, authorization flow, or settlement invariants require explicit security review in the pull request.
+
+## License
+
+Vector on Base is licensed under the [MIT License](LICENSE).

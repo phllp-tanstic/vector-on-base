@@ -2,6 +2,7 @@
   "name": "vector-on-base",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Intent execution layer for Coinbase Tokenized Stocks on Base.",
   "workspaces": [

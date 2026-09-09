@@ -11,12 +11,13 @@ import {
   acceptRiskResult,
   editThesisParameters,
   evaluateThesisRisk,
-  interpretDemoThesis,
+  executableThesisFromInterpretation,
   type DeterministicThesisParameters,
   type ExecutableThesis,
   type ThesisRiskResult,
   type ThesisStatus,
 } from "../lib/executable-thesis";
+import { requestAiThesisInterpretation } from "../lib/ai-intent";
 import { asEvmAddress } from "../lib/authorization";
 import {
   LocalExecutableThesisRepository,
@@ -128,6 +129,7 @@ export function ExecutableThesisWorkspace({
   const [thesis, setThesis] = useState<ExecutableThesis>();
   const [risk, setRisk] = useState<ThesisRiskResult>();
   const [interpreterError, setInterpreterError] = useState<string>();
+  const [isInterpreting, setIsInterpreting] = useState(false);
   const [repository, setRepository] = useState<LocalExecutableThesisRepository>();
   const [executionRepository, setExecutionRepository] = useState<LocalThesisExecutionRepository>();
   const [savedTheses, setSavedTheses] = useState<readonly PersistedExecutableThesis[]>([]);
@@ -201,15 +203,19 @@ export function ExecutableThesisWorkspace({
     setThesis((current) => (current ? { ...current, status } : current));
   }, []);
 
-  function interpret() {
+  async function interpret() {
     setInterpreterError(undefined);
+    setIsInterpreting(true);
     try {
-      setThesis(interpretDemoThesis(sourceText));
+      const interpretation = await requestAiThesisInterpretation(sourceText);
+      setThesis(executableThesisFromInterpretation(sourceText, interpretation));
       setRisk(undefined);
       setSavedThesis(undefined);
       setSavedMessage(undefined);
     } catch (error) {
       setInterpreterError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsInterpreting(false);
     }
   }
 
@@ -540,7 +546,7 @@ export function ExecutableThesisWorkspace({
               <p className="eyebrow">Create thesis</p>
               <h2>Describe the outcome, not the transaction</h2>
             </div>
-            <span className="demo-chip">Demo intent interpreter</span>
+            <span className="demo-chip">Groq AI interpreter</span>
           </div>
           <textarea
             aria-label="Market thesis"
@@ -549,9 +555,9 @@ export function ExecutableThesisWorkspace({
             value={sourceText}
           />
           <div className="composer-footer">
-            <p>Controlled local grammar · no free-form text reaches execution</p>
-            <button onClick={interpret} type="button">
-              Interpret thesis
+            <p>AI structures intent · deterministic code controls risk and execution</p>
+            <button disabled={isInterpreting} onClick={() => void interpret()} type="button">
+              {isInterpreting ? "Interpreting…" : "Interpret thesis"}
             </button>
           </div>
           {interpreterError && <p className="error">{interpreterError}</p>}
@@ -700,7 +706,7 @@ export function ExecutableThesisWorkspace({
               </div>
               <p>
                 {risk.reasons.includes("RESERVE_ADJUSTMENT")
-                  ? `Deterministic portfolio rules computed ${money(risk.executableSizeUsd)} to preserve your ${money(thesis.parameters.reserveUsd)} USDC reserve. AI structured the thesis; it did not choose this amount.`
+                  ? `Deterministic portfolio rules computed ${money(risk.executableSizeUsd)} to preserve your ${money(thesis.parameters.reserveUsd)} USDC reserve. Groq structured the thesis; it did not choose this amount.`
                   : "No sizing adjustment required."}
               </p>
             </div>

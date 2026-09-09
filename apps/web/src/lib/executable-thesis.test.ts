@@ -10,6 +10,7 @@ import {
   canAuthorizeThesis,
   editThesisParameters,
   evaluateThesisRisk,
+  executableThesisFromInterpretation,
   interpretDemoThesis,
   isDemoAssetAllowedInProduction,
   prepareThesisExecution,
@@ -19,6 +20,27 @@ import {
 const NOW = new Date("2026-09-02T12:00:00.000Z");
 
 describe("Executable Thesis demo flow", () => {
+  it("converts validated AI output without creating risk acceptance or authority", () => {
+    const thesis = executableThesisFromInterpretation(
+      DEFAULT_DEMO_THESIS,
+      {
+        asset: "NVDA",
+        rationale: "Acquire NVDA only at or below the requested entry price.",
+        entryPriceUsd: 165,
+        requestedSizeUsd: 450,
+        maxExposurePercent: 9,
+        reserveUsd: 1_100,
+        maxSlippagePercent: 0.75,
+        expiryIso: "2026-09-11T17:00:00.000Z",
+      },
+      NOW,
+    );
+    assert.equal(thesis.status, "INTERPRETED");
+    assert.equal(thesis.parameters.requestedSizeUsd, 450);
+    assert.equal("authorization" in thesis, false);
+    assert.equal("risk" in thesis, false);
+  });
+
   it("maps thesis input into a structured, typed thesis", () => {
     const thesis = interpretDemoThesis(DEFAULT_DEMO_THESIS, NOW);
     assert.equal(thesis.intent.asset, "NVDA");

@@ -1,5 +1,7 @@
+import type { InterpretedMarketThesis } from "@vector/intent";
+
 export const DEFAULT_DEMO_THESIS =
-  "Buy NVDA if it falls below $170. Use up to 10% of my portfolio, keep at least $1,000 USDC, maximum 1% slippage, and expire this thesis on Friday.";
+  "Buy $500 of NVDA if it falls below $170. Use up to 10% of my portfolio, keep at least $1,000 USDC, maximum 1% slippage, and expire this thesis on Friday.";
 
 export const TESTNET_EXECUTION_DISCLOSURE = "BASE SEPOLIA LIVE DEMO · TEST ASSETS · NO REAL STOCKS";
 
@@ -65,6 +67,32 @@ export interface PreparedThesisExecution {
   readonly thesisId: string;
 }
 
+/** Converts validated AI output into local working state without granting execution authority. */
+export function executableThesisFromInterpretation(
+  sourceText: string,
+  interpretation: InterpretedMarketThesis,
+  now = new Date(),
+): ExecutableThesis {
+  return Object.freeze({
+    id: `nvda-${now.getTime()}`,
+    intent: Object.freeze({
+      asset: interpretation.asset,
+      rationale: interpretation.rationale,
+      sourceText: sourceText.trim(),
+    }),
+    parameters: Object.freeze({
+      entryPriceUsd: interpretation.entryPriceUsd,
+      expiryIso: interpretation.expiryIso,
+      maxExposurePercent: interpretation.maxExposurePercent,
+      maxSlippagePercent: interpretation.maxSlippagePercent,
+      requestedSizeUsd: interpretation.requestedSizeUsd,
+      reserveUsd: interpretation.reserveUsd,
+    }),
+    planRevision: 0,
+    status: "INTERPRETED",
+  });
+}
+
 export const DEMO_PORTFOLIO = Object.freeze({
   availableUsdcUsd: 1_320,
   currentAssetExposureUsd: 0,
@@ -96,7 +124,7 @@ function numberFrom(text: string, pattern: RegExp, fallback: number): number {
   return match?.[1] ? Number(match[1].replaceAll(",", "")) : fallback;
 }
 
-/** Deterministic demo grammar. This is deliberately not represented as a production AI parser. */
+/** Deterministic fixture parser retained for local tests; the browser uses the Groq API route. */
 export function interpretDemoThesis(sourceText: string, now = new Date()): ExecutableThesis {
   const normalized = sourceText.trim();
   if (!normalized) throw new Error("A thesis is required.");

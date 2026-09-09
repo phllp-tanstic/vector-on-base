@@ -14,9 +14,13 @@ explicitly create one; `enableSpendPermissions` is always false.
 
 1. Create/select a CDP project and enable email authentication.
 2. Add `http://localhost:3000` to its allowed origins.
-3. Create `apps/web/.env.local` containing only browser-safe public configuration:
+3. Copy `apps/web/.env.example` to `apps/web/.env.local`. Configure the server-only Groq key and
+   browser-safe public values. Only variables prefixed with `NEXT_PUBLIC_` are included in the
+   browser bundle:
 
    ```sh
+   GROQ_API_KEY=your-server-only-groq-key
+   GROQ_MODEL=openai/gpt-oss-20b
    NEXT_PUBLIC_CDP_PROJECT_ID=your-public-project-id
    NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS=0xDeployedBaseSepoliaFaucet
    ```
@@ -26,7 +30,7 @@ explicitly create one; `enableSpendPermissions` is always false.
 6. Confirm the page shows the user-controlled Smart Account and `Base Sepolia (84532)`.
 7. If the account has less than 1 mUSDC, click **Get 10 demo mUSDC** and explicitly authorize the
    separate one-call faucet UserOperation. Wait for confirmation and the automatic balance refresh.
-8. Complete the deterministic thesis and risk flow, then click **Prepare execution**. Nothing is
+8. Complete the AI interpretation and deterministic risk flow, then click **Prepare execution**. Nothing is
    submitted on page load or preparation, and a successful faucet claim never prepares execution.
 9. Review the exact fixture amounts, contracts, nonce, deadline, and two calls.
 10. Click **Authorize 2 calls**, approve the Coinbase Smart Account request, and wait for the
