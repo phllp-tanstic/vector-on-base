@@ -121,6 +121,15 @@ describe("persisted executable theses", () => {
     }
   });
 
+  it("round trips UTF-8 share text without relying on Node Buffer encodings", async () => {
+    const payload = {
+      ...toPublicThesisPayload(await fixture()),
+      thesisText: `${DEFAULT_DEMO_THESIS} — conviction ↑`,
+      rationale: "Price dislocation → staged entry.",
+    };
+    assert.deepEqual(decodeSharePayload(encodeSharePayload(payload)), payload);
+  });
+
   it("rejects malformed, oversized, unknown-field, and unsupported-version payloads", async () => {
     const payload = toPublicThesisPayload(await fixture());
     assert.throws(() => decodeSharePayload("%%%"), /Malformed/u);

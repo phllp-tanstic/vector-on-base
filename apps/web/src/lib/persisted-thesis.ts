@@ -252,7 +252,6 @@ export async function fingerprintPublicThesis(payload: PublicThesisPayload): Pro
 }
 
 function base64UrlEncode(value: string): string {
-  if (typeof Buffer !== "undefined") return Buffer.from(value).toString("base64url");
   const bytes = new TextEncoder().encode(value);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -261,7 +260,6 @@ function base64UrlEncode(value: string): string {
 
 function base64UrlDecode(value: string): string {
   if (!/^[A-Za-z0-9_-]+$/u.test(value)) throw new Error("Malformed shared thesis link.");
-  if (typeof Buffer !== "undefined") return Buffer.from(value, "base64url").toString("utf8");
   const padded = value
     .replaceAll("-", "+")
     .replaceAll("_", "/")
