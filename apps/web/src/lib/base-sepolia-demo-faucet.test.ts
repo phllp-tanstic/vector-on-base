@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { VECTOR_BUILDER_DATA_SUFFIX } from "@vector/shared";
 import { decodeFunctionData } from "viem";
 
 import { BASE_SEPOLIA_CHAIN_ID } from "./authorization.ts";
@@ -130,6 +131,7 @@ describe("Base Sepolia demo faucet browser boundary", () => {
       evmSmartAccount: SMART_ACCOUNT,
       network: "base-sepolia",
       calls: [...plan.calls],
+      dataSuffix: VECTOR_BUILDER_DATA_SUFFIX,
     });
   });
 

@@ -57,7 +57,7 @@ flowchart LR
 
 The main components are:
 
-- `apps/web`: Next.js App Router UI. It calls a server-side Groq intent interpreter, then provides browser-local thesis storage, share links, Coinbase CDP authentication, a Base Sepolia faucet, and a fixed test swap.
+- `apps/web`: Next.js App Router UI. It calls a server-side Groq intent interpreter, then provides browser-local thesis storage, share links, Coinbase CDP authentication, a Base Sepolia faucet, and a fixed test swap. Its Smart Account UserOperations include Vector's ERC-8021 Builder Code attribution.
 - `packages/shared`: chain and asset types plus the asset registry.
 - `packages/b20`: B20 address validation and raw/economic amount conversion.
 - `packages/portfolio`: portfolio snapshots and fixed-point reference valuation.
@@ -246,13 +246,15 @@ transactionSubmittedToBase=false
 
 The interpretation route cannot authorize, quote, or submit a transaction. All risk and execution boundaries remain deterministic and separate.
 
+Every Smart Account UserOperation constructed by Vector includes the Schema 0 ERC-8021 suffix for the registered Base Builder Code `bc_wm9pyn6y`. This applies to the Base Sepolia faucet and test execution requests as well as the Base Mainnet Smart Account submission boundary.
+
 ### TypeScript package entry points
 
 All workspace packages are private and export TypeScript source directly. They are intended for this monorepo, not as published npm packages.
 
 | Package                | Main entry points                                                                                                                                                    | Return or error behavior                                                                                                                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@vector/shared`       | `parseVectorAsset`, `AssetRegistry`, `VECTOR_CHAIN_ID`                                                                                                               | Parses ERC-20/B20 assets and rejects invalid or duplicate registry entries with typed errors.                                                                                                                     |
+| `@vector/shared`       | `parseVectorAsset`, `AssetRegistry`, `VECTOR_CHAIN_ID`, `VECTOR_BUILDER_CODE`, `VECTOR_BUILDER_DATA_SUFFIX`                                                          | Parses ERC-20/B20 assets, rejects invalid or duplicate registry entries with typed errors, and exposes Vector's canonical Schema 0 ERC-8021 attribution.                                                          |
 | `@vector/b20`          | `getB20Variant`, `assertB20AssetAddress`, `rawToUIAmount`, `uiToRawAmount`                                                                                           | Uses branded `bigint` amounts and throws typed errors for invalid addresses, amounts, or multipliers.                                                                                                             |
 | `@vector/portfolio`    | `createPortfolioSnapshot`, `createAssetPrice`, `valuePosition`, `valuePortfolio`, `valuePortfolioWithProvider`                                                       | Returns immutable snapshots and fixed-point values; throws `PortfolioDomainError` or `PortfolioValuationError` for invalid or incomplete inputs.                                                                  |
 | `@vector/risk`         | `validateExecutionCandidate(candidate, registry)`                                                                                                                    | Returns `RiskValidationResult` with ordered checks and accumulated rejection codes. It does not authorize or submit.                                                                                              |
@@ -405,7 +407,7 @@ Those package scripts do not use Node's `--env-file-if-exists` flag. Export thei
 
 ## Contributing
 
-The repository has no root `CONTRIBUTING.md` and no automated CI workflow. Before opening a pull request:
+The repository has no root `CONTRIBUTING.md`. The GitHub Actions workflow in `.github/workflows/ci.yml` runs the TypeScript quality suite and Solidity tests. Before opening a pull request:
 
 1. Open an issue or describe the behavior, trust-boundary impact, and intended network scope in the pull request.
 2. Keep Base Sepolia fixtures out of the Base Mainnet registry and keep secrets out of source, browser variables, logs, and test fixtures.

@@ -1,5 +1,7 @@
 import { encodeFunctionData, getAddress, isAddress, zeroAddress, type Hex } from "viem";
 
+import { VECTOR_BUILDER_DATA_SUFFIX } from "@vector/shared";
+
 import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_NETWORK, asEvmAddress } from "./authorization.ts";
 
 export const DEMO_FAUCET_ADDRESS_ENV_VAR = "NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS" as const;
@@ -189,6 +191,7 @@ export function buildDemoFaucetClaimRequest(
     evmSmartAccount: smartAccountAddress,
     network: BASE_SEPOLIA_NETWORK,
     calls: [...plan.calls],
+    dataSuffix: VECTOR_BUILDER_DATA_SUFFIX,
   };
 }
 

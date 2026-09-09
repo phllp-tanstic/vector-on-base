@@ -6,5 +6,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "ox": "0.14.44"
   }
 }

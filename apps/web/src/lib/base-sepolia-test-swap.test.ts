@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { VECTOR_BUILDER_DATA_SUFFIX } from "@vector/shared";
 import { getAddress } from "viem";
 
 import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_NETWORK } from "./authorization.ts";
@@ -164,6 +165,7 @@ describe("Base Sepolia browser test-swap fixture", () => {
       evmSmartAccount: SMART_ACCOUNT,
       network: "base-sepolia",
       calls: [...plan.calls],
+      dataSuffix: VECTOR_BUILDER_DATA_SUFFIX,
     });
     assert.throws(
       () =>

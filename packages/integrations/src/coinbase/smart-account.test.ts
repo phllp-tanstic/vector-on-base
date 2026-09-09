@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { buildVectorExecutionPlan, type VectorExecutionPlan } from "@vector/execution";
+import { VECTOR_BUILDER_DATA_SUFFIX } from "@vector/shared";
 
 import { createAuthorizationFixtureInput } from "../../../execution/src/authorization-fixture.ts";
 import {
@@ -53,6 +54,7 @@ describe("Coinbase user-controlled Smart Account boundary", () => {
     assert.deepEqual(requests, [
       {
         calls: buildSmartAccountCalls(executionPlan),
+        dataSuffix: VECTOR_BUILDER_DATA_SUFFIX,
         evmSmartAccount: executionPlan.owner,
         network: "base",
       },

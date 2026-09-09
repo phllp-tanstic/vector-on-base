@@ -1,4 +1,4 @@
-import { VECTOR_CHAIN_ID, type EvmAddress } from "@vector/shared";
+import { VECTOR_BUILDER_DATA_SUFFIX, VECTOR_CHAIN_ID, type EvmAddress } from "@vector/shared";
 import { decodeFunctionData, erc20Abi, isAddress, type Hex } from "viem";
 
 export const CDP_BASE_MAINNET_NETWORK = "base" as const;
@@ -128,6 +128,7 @@ export function buildSmartAccountCalls(
 
 export interface CdpUserOperationRequest {
   readonly calls: readonly CdpSmartAccountCall[];
+  readonly dataSuffix: Hex;
   readonly evmSmartAccount: EvmAddress;
   readonly network: typeof CDP_BASE_MAINNET_NETWORK;
   readonly useCdpPaymaster?: boolean;
@@ -164,6 +165,7 @@ export async function sendSmartAccountExecution(
   const calls = buildSmartAccountCalls(plan);
   return sender.sendUserOperation({
     calls,
+    dataSuffix: VECTOR_BUILDER_DATA_SUFFIX,
     evmSmartAccount: plan.smartAccountAddress,
     network: CDP_BASE_MAINNET_NETWORK,
     ...(options.useCdpPaymaster === undefined ? {} : { useCdpPaymaster: options.useCdpPaymaster }),

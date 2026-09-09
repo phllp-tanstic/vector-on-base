@@ -1,5 +1,7 @@
 import { decodeFunctionData, encodeFunctionData, type Hex } from "viem";
 
+import { VECTOR_BUILDER_DATA_SUFFIX } from "@vector/shared";
+
 import { BASE_SEPOLIA_CHAIN_ID, BASE_SEPOLIA_NETWORK, asEvmAddress } from "./authorization.ts";
 
 export const BASE_SEPOLIA_TEST_FIXTURES = Object.freeze({
@@ -244,6 +246,7 @@ export function buildBaseSepoliaTestSwapRequest(
     evmSmartAccount: smartAccountAddress,
     network: BASE_SEPOLIA_NETWORK,
     calls: [...plan.calls],
+    dataSuffix: VECTOR_BUILDER_DATA_SUFFIX,
   };
 }
 
