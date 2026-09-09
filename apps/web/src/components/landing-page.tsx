@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const DOCUMENTATION_URL = "https://github.com/phllp-tanstic/vector-on-base#readme";
 
@@ -126,6 +126,33 @@ function MeshCanvas() {
   return <canvas ref={canvasRef} className="landing-mesh" aria-hidden="true" />;
 }
 
+function LandingNote({
+  answer,
+  id,
+  question,
+}: Readonly<{ answer: string; id: string; question: string }>) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="landing-note">
+      <h3>
+        <button
+          type="button"
+          aria-controls={id}
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span>{question}</span>
+          <i aria-hidden="true" />
+        </button>
+      </h3>
+      <p id={id} hidden={!open}>
+        {answer}
+      </p>
+    </div>
+  );
+}
+
 export function LandingPage() {
   return (
     <main className="landing-page">
@@ -224,6 +251,244 @@ export function LandingPage() {
             <p className="landing-diagram-label">V1 · BASE SEPOLIA</p>
           </div>
         </section>
+
+        <section className="landing-section landing-overview" id="overview">
+          <div className="landing-section-heading">
+            <p className="landing-kicker">[ 01 · OVERVIEW ]</p>
+            <h2>Vector on Base</h2>
+          </div>
+          <div className="landing-overview-grid">
+            <div className="landing-overview-copy">
+              <p className="landing-lead">
+                A market thesis should describe what you want, without silently deciding what your
+                portfolio can afford.
+              </p>
+              <p>
+                Vector separates interpretation, deterministic risk checks, and wallet
+                authorization. It turns natural-language intent into a reviewable Executable Thesis,
+                adapts the requested position to explicit constraints, and leaves the final decision
+                with the user.
+              </p>
+            </div>
+            <dl className="landing-system-facts">
+              <div>
+                <dt>Network</dt>
+                <dd>Base Sepolia</dd>
+              </div>
+              <div>
+                <dt>Authorization</dt>
+                <dd>Coinbase Smart Account</dd>
+              </div>
+              <div>
+                <dt>Risk policy</dt>
+                <dd>Deterministic constraints</dd>
+              </div>
+              <div>
+                <dt>Demo market</dt>
+                <dd>NVDA scenario</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+
+        <section className="landing-section" id="how-it-works">
+          <div className="landing-section-heading landing-section-heading-wide">
+            <div>
+              <p className="landing-kicker">[ 02 · HOW IT WORKS ]</p>
+              <h2>From thesis to settlement</h2>
+            </div>
+            <p>
+              Five visible stages keep interpretation, policy, authorization, and settlement
+              separate.
+            </p>
+          </div>
+          <ol className="landing-process">
+            <li>
+              <span>01</span>
+              <h3>Express</h3>
+              <p>Describe an entry, position size, limits, and expiry in plain language.</p>
+            </li>
+            <li>
+              <span>02</span>
+              <h3>Structure</h3>
+              <p>
+                AI maps the thesis into a strict schema. It does not receive execution authority.
+              </p>
+            </li>
+            <li>
+              <span>03</span>
+              <h3>Adapt</h3>
+              <p>
+                Deterministic code applies exposure, reserve, trigger, slippage, and expiry rules.
+              </p>
+            </li>
+            <li>
+              <span>04</span>
+              <h3>Authorize</h3>
+              <p>Review the exact result and approve it with a user-controlled Smart Account.</p>
+            </li>
+            <li>
+              <span>05</span>
+              <h3>Settle</h3>
+              <p>Base confirms the testnet operation and Vector records the receipt locally.</p>
+            </li>
+          </ol>
+        </section>
+
+        <section className="landing-section" id="features">
+          <div className="landing-section-heading">
+            <p className="landing-kicker">[ 03 · FEATURES ]</p>
+            <h2>Built around explicit control</h2>
+          </div>
+          <div className="landing-feature-grid">
+            <article>
+              <span>[ INTENT ]</span>
+              <h3>Structured interpretation</h3>
+              <p>AI returns schema-constrained thesis parameters through a server-side route.</p>
+            </article>
+            <article>
+              <span>[ POLICY ]</span>
+              <h3>Deterministic adaptation</h3>
+              <p>Portfolio rules can reduce or block a requested position before authorization.</p>
+            </article>
+            <article>
+              <span>[ CONTROL ]</span>
+              <h3>User-owned authorization</h3>
+              <p>Coinbase CDP handles email authentication and Smart Account authorization.</p>
+            </article>
+            <article>
+              <span>[ PROOF ]</span>
+              <h3>Onchain receipts</h3>
+              <p>Confirmed test operations expose transaction and UserOperation identifiers.</p>
+            </article>
+            <article>
+              <span>[ PORTABLE ]</span>
+              <h3>Shareable theses</h3>
+              <p>
+                Public links carry intent and constraints, never wallet authorization or receipts.
+              </p>
+            </article>
+            <article>
+              <span>[ LOCAL ]</span>
+              <h3>Saved thesis library</h3>
+              <p>The MVP keeps saved theses and confirmed receipts in browser-local storage.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="landing-section landing-state" id="current-state">
+          <div className="landing-section-heading landing-section-heading-wide">
+            <div>
+              <p className="landing-kicker">[ 04 · CURRENT STATE ]</p>
+              <h2>Testnet now. Mainnet after validation.</h2>
+            </div>
+            <span className="landing-live-status">
+              <i /> BASE SEPOLIA LIVE DEMO
+            </span>
+          </div>
+          <div className="landing-roadmap">
+            <article>
+              <p className="landing-roadmap-label">01 · PRE-HACKATHON</p>
+              <h3>Initial direction</h3>
+              <ul>
+                <li>Define the Executable Thesis model</li>
+                <li>Separate risk policy from authorization</li>
+                <li>Design for tokenized markets on Base</li>
+              </ul>
+            </article>
+            <article className="landing-roadmap-current">
+              <p className="landing-roadmap-label">02 · HACKATHON MVP</p>
+              <h3>Demonstrated now</h3>
+              <ul>
+                <li>Groq-assisted NVDA thesis interpretation</li>
+                <li>Deterministic portfolio adaptation</li>
+                <li>Coinbase Smart Account authorization</li>
+                <li>Base Sepolia test-asset settlement</li>
+                <li>Local persistence and public sharing</li>
+              </ul>
+            </article>
+            <article>
+              <p className="landing-roadmap-label">03 · POST-HACKATHON</p>
+              <h3>Path to mainnet</h3>
+              <ul>
+                <li>Complete provider and eligibility access</li>
+                <li>Wire live portfolio and reference data</li>
+                <li>Harden quote freshness and simulation</li>
+                <li>Audit and deploy VectorExecutor on Base</li>
+                <li>Add durable storage and monitoring</li>
+              </ul>
+            </article>
+          </div>
+          <p className="landing-state-note">
+            The current flow uses mock assets with no monetary value. Base Mainnet execution is not
+            deployed or enabled.
+          </p>
+        </section>
+
+        <section className="landing-section landing-notes" id="system-notes">
+          <div className="landing-section-heading landing-section-heading-wide">
+            <div>
+              <p className="landing-kicker">[ 05 · SYSTEM NOTES ]</p>
+              <h2>Before you use Vector</h2>
+            </div>
+            <p>
+              Clear boundaries for a new protocol concept and its current testnet implementation.
+            </p>
+          </div>
+          <div className="landing-accordion">
+            <LandingNote
+              id="landing-note-market-scope"
+              question="Is Vector limited to NVDA?"
+              answer="No. NVDA is the bounded hackathon demonstration scenario. The product architecture is intended for broader tokenized markets, subject to asset, provider, account, and jurisdiction support."
+            />
+            <LandingNote
+              id="landing-note-ai-authority"
+              question="Does the AI execute trades?"
+              answer="No. AI produces schema-constrained intent parameters. Deterministic code applies the risk policy, and the user independently authorizes the final operation."
+            />
+            <LandingNote
+              id="landing-note-demo-assets"
+              question="Are the demo assets real tokenized stocks?"
+              answer="No. The live demo runs on Base Sepolia with mock assets that have no monetary value. Production tokenized-stock access is not represented as available."
+            />
+            <LandingNote
+              id="landing-note-sharing"
+              question="What is included in a shared thesis?"
+              answer="A share link contains public intent and constraints. It excludes wallet authorization, calldata, quotes, balances, nonces, and transaction receipts. A recipient must adapt and authorize independently."
+            />
+            <LandingNote
+              id="landing-note-storage"
+              question="Where is thesis data stored?"
+              answer="Saved theses and confirmed receipts remain in this browser's local storage. The MVP does not provide hosted sync, recovery, or a cross-device account library."
+            />
+          </div>
+        </section>
+
+        <section className="landing-cta">
+          <p className="landing-kicker">[ READY TO TEST THE FLOW? ]</p>
+          <h2>Express the thesis. Keep control.</h2>
+          <Link className="landing-button" href="/app">
+            Launch App
+          </Link>
+        </section>
+
+        <footer className="landing-footer">
+          <div>
+            <Link className="wordmark" href="/" aria-label="Vector home">
+              VECTOR<span>[ BASE ]</span>
+            </Link>
+            <p>Intent execution for tokenized markets on Base.</p>
+          </div>
+          <nav aria-label="Footer navigation">
+            <a href="#overview">Overview</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#current-state">Current state</a>
+            <a href={DOCUMENTATION_URL} target="_blank" rel="noopener noreferrer">
+              Documentation
+            </a>
+          </nav>
+          <p className="landing-footer-legal">Hackathon MVP · Base Sepolia · Test assets only</p>
+        </footer>
       </div>
     </main>
   );
