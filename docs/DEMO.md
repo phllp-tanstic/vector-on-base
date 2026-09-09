@@ -102,7 +102,7 @@ BaseScan**.
 Say: “This receipt links the executed thesis to the Smart Account, VectorExecutor, UserOperation,
 confirmed Base Sepolia transaction, timestamp, and deterministic reason.”
 
-Action: Point briefly to Capability readiness.
+Action: Point briefly to Capability status.
 
 Say: “Smart Account authorization, VectorExecutor architecture, B20 validation, and deterministic
 risk are demonstrated. External access and credentials remain pending. Provider-backed readiness
@@ -137,7 +137,8 @@ Sepolia and test-asset labels visible wherever execution appears.
 7. Fork with compact **Application provenance**, parent, and root.
 8. Execution preview with sell amount, asset, minimum receive, network, deadline, and two calls.
 9. Successful receipt with transaction proof and BaseScan action.
-10. Capability readiness with the four READY, two ACCESS PENDING, and one NOT DEPLOYED states.
+10. Capability status with demonstrated and implemented work separated from the two ACCESS PENDING
+    integrations and the NOT DEPLOYED Mainnet executor.
 
 Before capture, check 390px mobile, tablet, standard desktop, and wide desktop for overflow,
 reachable actions, readable cards, and truncated copyable identifiers.

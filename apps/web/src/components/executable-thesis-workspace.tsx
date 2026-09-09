@@ -854,18 +854,30 @@ export function ExecutableThesisWorkspace({
         </section>
         <section className="readiness-card">
           <p className="eyebrow">Production path</p>
-          <h3>Capability readiness</h3>
+          <h3>Capability status</h3>
           <ul>
             {PRODUCTION_READINESS.map((item) => (
               <li key={item.label}>
                 <span>{item.label}</span>
-                <strong className={item.state === "READY" ? "ready" : "pending"}>
+                <strong
+                  className={
+                    item.state === "DEMONSTRATED"
+                      ? "demonstrated"
+                      : item.state === "IMPLEMENTED"
+                        ? "implemented"
+                        : "pending"
+                  }
+                >
                   {item.state}
                 </strong>
               </li>
             ))}
           </ul>
-          <small>Informational only. No mainnet transaction is available from this demo.</small>
+          <small>
+            No Mainnet transaction is available from this demo. Production tokenized-stock access
+            depends on provider, account, and jurisdiction eligibility; this testnet demo does not
+            determine eligibility.
+          </small>
         </section>
       </aside>
     </div>

@@ -792,7 +792,8 @@ blockquote {
 .readiness-card li strong {
   font-size: 0.61rem;
 }
-.ready {
+.demonstrated,
+.implemented {
   color: #187344;
 }
 .pending {
@@ -1627,8 +1628,11 @@ a {
 .readiness-card li strong {
   font-family: var(--vector-mono);
 }
-.ready {
+.demonstrated {
   color: var(--vector-lime);
+}
+.implemented {
+  color: #b9adff;
 }
 .pending {
   color: #e7ad43;
@@ -2083,6 +2087,14 @@ dt {
   font-weight: 400;
   line-height: 1.6;
 }
+.landing-disclosure {
+  max-width: 530px;
+  margin: 18px 0 0;
+  color: var(--vector-graphite);
+  font-family: var(--vector-mono);
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
 .landing-visual {
   display: flex;
   align-items: center;
@@ -2194,6 +2206,9 @@ dt {
 }
 .landing-copy > .landing-button {
   animation-delay: 220ms;
+}
+.landing-disclosure {
+  animation-delay: 245ms;
 }
 .landing-visual {
   animation-delay: 275ms;

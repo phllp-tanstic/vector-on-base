@@ -172,6 +172,10 @@ export function LandingPage() {
             <Link className="landing-button landing-reveal" href="/app">
               Launch App
             </Link>
+            <p className="landing-disclosure landing-reveal">
+              Hackathon demo on Base Sepolia with test assets. Production tokenized-stock access
+              depends on provider, account, and jurisdiction eligibility.
+            </p>
           </div>
 
           <div className="landing-visual landing-reveal">

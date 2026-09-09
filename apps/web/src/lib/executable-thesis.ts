@@ -102,10 +102,10 @@ export const DEMO_PORTFOLIO = Object.freeze({
 }) satisfies DemoPortfolioSnapshot;
 
 export const PRODUCTION_READINESS = Object.freeze([
-  { label: "Base Smart Account authorization", state: "READY" },
-  { label: "VectorExecutor architecture", state: "READY" },
-  { label: "B20 asset validation", state: "READY" },
-  { label: "Deterministic risk engine", state: "READY" },
+  { label: "Base Smart Account authorization", state: "DEMONSTRATED" },
+  { label: "VectorExecutor on Base Sepolia", state: "DEMONSTRATED" },
+  { label: "B20 asset validation", state: "IMPLEMENTED" },
+  { label: "Deterministic risk engine", state: "DEMONSTRATED" },
   { label: "0x BStocks routing", state: "ACCESS PENDING" },
   { label: "Chainlink equity reference data", state: "ACCESS PENDING" },
   { label: "Base Mainnet deployment", state: "NOT DEPLOYED" },
@@ -281,9 +281,6 @@ export function isDemoAssetAllowedInProduction(symbol: string): boolean {
   return !["mUSDC", "NOTB20"].includes(symbol);
 }
 
-export function readinessCanDisplayReady(state: string): boolean {
-  return state === "READY";
-}
 import {
   maximumExposureValue,
   maximumSpendAfterReserve,

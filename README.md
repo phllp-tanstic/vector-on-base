@@ -125,36 +125,33 @@ Do not put CDP API secrets, Wallet Secrets, deployer keys, or server credentials
 
 ### Base Mainnet and provider variables
 
-| Variable                             | Required by                                        | Default or example                           | Description                                                                                                                                |
-| ------------------------------------ | -------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `BASE_RPC_URL`                       | Base read commands                                 | `https://mainnet.base.org`                   | Base Mainnet HTTP(S) RPC URL.                                                                                                              |
-| `ZEROX_API_KEY`                      | `verify:zerox`, mainnet readiness                  | No default                                   | Server-side 0x API key.                                                                                                                    |
-| `ZEROX_API_BASE_URL`                 | 0x client                                          | `https://api.0x.org`                         | Optional API base URL. HTTP is accepted only for loopback testing. This variable is recognized by code but is missing from `.env.example`. |
-| `CHAINLINK_DATA_STREAMS_API_KEY`     | Chainlink verification                             | No default                                   | Server-side Chainlink Data Streams API key.                                                                                                |
-| `CHAINLINK_DATA_STREAMS_USER_SECRET` | Chainlink verification                             | No default                                   | Server-side Chainlink Data Streams user secret.                                                                                            |
-| `VECTOR_EXECUTOR_ADDRESS`            | Production plan creation and readiness             | `0x1111111111111111111111111111111111111111` | Base Mainnet `VectorExecutor` address. No production executor is currently deployed.                                                       |
-| `VECTOR_VERIFY_TAKER`                | `verify:zerox`                                     | `0x2222222222222222222222222222222222222222` | Non-zero taker address used for the non-submitting quote request.                                                                          |
-| `VECTOR_VERIFY_SELL_USDC`            | `verify:zerox`                                     | `1000000`                                    | Positive raw USDC amount. The default is 1 USDC.                                                                                           |
-| `VECTOR_VERIFY_ACCOUNT`              | `verify:portfolio`                                 | Zero address                                 | Optional account for Base balance reads. This command does not automatically load `.env`.                                                  |
-| `VECTOR_MAINNET_SMART_ACCOUNT`       | Reference-price portfolio projection and readiness | `0x2222222222222222222222222222222222222222` | Optional for preliminary reads, but required for an account-bound canonical `READY` result.                                                |
-| `VECTOR_MAINNET_SELL_USDC`           | Mainnet readiness                                  | `1000000`                                    | Positive raw USDC sell amount.                                                                                                             |
-| `VECTOR_MAINNET_STOCK_SYMBOL`        | Mainnet readiness                                  | `NVDAc`                                      | Must resolve to an enabled stock in the verified registry.                                                                                 |
-| `VECTOR_MAINNET_STOCK_TOKEN_ADDRESS` | Mainnet readiness                                  | Registry address for the selected symbol     | Optional address pin. It cannot introduce an unregistered asset.                                                                           |
-
-The `VECTOR_VERIFY_ACCOUNT` and `VECTOR_MAINNET_*` variables are read by code but are not currently listed in `.env.example`.
+| Variable                             | Required by                                        | Default or example                           | Description                                                                                 |
+| ------------------------------------ | -------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `BASE_RPC_URL`                       | Base read commands                                 | `https://mainnet.base.org`                   | Base Mainnet HTTP(S) RPC URL.                                                               |
+| `ZEROX_API_KEY`                      | `verify:zerox`, mainnet readiness                  | No default                                   | Server-side 0x API key.                                                                     |
+| `ZEROX_API_BASE_URL`                 | 0x client                                          | `https://api.0x.org`                         | Optional API base URL. HTTP is accepted only for loopback testing.                          |
+| `CHAINLINK_DATA_STREAMS_API_KEY`     | Chainlink verification                             | No default                                   | Server-side Chainlink Data Streams API key.                                                 |
+| `CHAINLINK_DATA_STREAMS_USER_SECRET` | Chainlink verification                             | No default                                   | Server-side Chainlink Data Streams user secret.                                             |
+| `VECTOR_EXECUTOR_ADDRESS`            | Production plan creation and readiness             | `0x1111111111111111111111111111111111111111` | Base Mainnet `VectorExecutor` address. No production executor is currently deployed.        |
+| `VECTOR_VERIFY_TAKER`                | `verify:zerox`                                     | `0x2222222222222222222222222222222222222222` | Non-zero taker address used for the non-submitting quote request.                           |
+| `VECTOR_VERIFY_SELL_USDC`            | `verify:zerox`                                     | `1000000`                                    | Positive raw USDC amount. The default is 1 USDC.                                            |
+| `VECTOR_VERIFY_ACCOUNT`              | `verify:portfolio`                                 | Zero address                                 | Optional account for Base balance reads. This command does not automatically load `.env`.   |
+| `VECTOR_MAINNET_SMART_ACCOUNT`       | Reference-price portfolio projection and readiness | `0x2222222222222222222222222222222222222222` | Optional for preliminary reads, but required for an account-bound canonical `READY` result. |
+| `VECTOR_MAINNET_SELL_USDC`           | Mainnet readiness                                  | `1000000`                                    | Positive raw USDC sell amount.                                                              |
+| `VECTOR_MAINNET_STOCK_SYMBOL`        | Mainnet readiness                                  | `NVDAc`                                      | Must resolve to an enabled stock in the verified registry.                                  |
+| `VECTOR_MAINNET_STOCK_TOKEN_ADDRESS` | Mainnet readiness                                  | Registry address for the selected symbol     | Optional address pin. It cannot introduce an unregistered asset.                            |
 
 ### Base Sepolia maintenance variables
 
-| Variable                                    | Required by                                 | Default or example                           | Description                                                                                                          |
-| ------------------------------------------- | ------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `BASE_SEPOLIA_RPC_URL`                      | Foundry deployment and maintenance commands | `https://sepolia.base.org`                   | Keep credential-bearing provider URLs server-side. Scripts receive this through `--rpc-url`.                         |
-| `VECTOR_OWNER_ADDRESS`                      | `DeployVectorExecutor.s.sol`                | `0x3333333333333333333333333333333333333333` | Initial `VectorExecutor` owner.                                                                                      |
-| `VECTOR_EXECUTOR_ADDRESS_SEPOLIA`           | Environment template only                   | `0x6F638384B3d750F902CE74Fd98a8536C3D8b8EdE` | The current Solidity scripts do not read this variable. `ConfigureBaseSepoliaFixtures` pins this executor in source. |
-| `VECTOR_TEST_MOCK_USDC_ADDRESS`             | Configure, faucet deploy, and mint scripts  | `0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9` | Base Sepolia-only mock USDC contract.                                                                                |
-| `VECTOR_TEST_MOCK_B20_LIKE_TOKEN_ADDRESS`   | Configure script                            | `0x7d8D51976eB74A7949116732521e48B08d0c92Fd` | Base Sepolia-only mock B20-like token.                                                                               |
-| `VECTOR_TEST_MOCK_EXECUTION_ROUTER_ADDRESS` | Configure script                            | `0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB` | Base Sepolia-only deterministic router.                                                                              |
-| `VECTOR_TEST_SMART_ACCOUNT`                 | Mint script                                 | User Smart Account address                   | Recipient of the maintenance mint.                                                                                   |
-| `VECTOR_TEST_MOCK_USDC_MINT_AMOUNT`         | Mint script                                 | `10000000`                                   | Raw 6-decimal mock USDC units. The script rejects zero and values above `100000000`.                                 |
+| Variable                                    | Required by                                 | Default or example                           | Description                                                                                  |
+| ------------------------------------------- | ------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `BASE_SEPOLIA_RPC_URL`                      | Foundry deployment and maintenance commands | `https://sepolia.base.org`                   | Keep credential-bearing provider URLs server-side. Scripts receive this through `--rpc-url`. |
+| `VECTOR_OWNER_ADDRESS`                      | `DeployVectorExecutor.s.sol`                | `0x3333333333333333333333333333333333333333` | Initial `VectorExecutor` owner.                                                              |
+| `VECTOR_TEST_MOCK_USDC_ADDRESS`             | Configure, faucet deploy, and mint scripts  | `0x1e3AEfb7A9220a50ff2655f6d912cEa70993B3a9` | Base Sepolia-only mock USDC contract.                                                        |
+| `VECTOR_TEST_MOCK_B20_LIKE_TOKEN_ADDRESS`   | Configure script                            | `0x7d8D51976eB74A7949116732521e48B08d0c92Fd` | Base Sepolia-only mock B20-like token.                                                       |
+| `VECTOR_TEST_MOCK_EXECUTION_ROUTER_ADDRESS` | Configure script                            | `0x6Bb43afccc1fd9d8864Db2604A9b27117716EcAB` | Base Sepolia-only deterministic router.                                                      |
+| `VECTOR_TEST_SMART_ACCOUNT`                 | Mint script                                 | User Smart Account address                   | Recipient of the maintenance mint.                                                           |
+| `VECTOR_TEST_MOCK_USDC_MINT_AMOUNT`         | Mint script                                 | `10000000`                                   | Raw 6-decimal mock USDC units. The script rejects zero and values above `100000000`.         |
 
 Deployment keys are not environment variables in this repository. Foundry scripts use an encrypted keystore account supplied with `--account`, and broadcasting requires an explicit `--broadcast` flag. See `docs/BASE_SEPOLIA.md` for the simulate-first procedure.
 
@@ -328,7 +325,7 @@ The judge-oriented browser walkthrough is in `docs/DEMO.md`. Base Sepolia contra
 
 ## Deployment
 
-The current public web deployment is [https://vector-on-base.vercel.app](https://vector-on-base.vercel.app). The Vercel project is connected to the GitHub repository, and pushes to `main` currently trigger a production deployment. The repository has no `vercel.json`, Dockerfile, GitHub Actions workflow, or version-controlled Vercel project metadata.
+The current public web deployment is [https://vector-on-base.vercel.app](https://vector-on-base.vercel.app). The Vercel project is connected to the GitHub repository, uses `apps/web` as its application root, and deploys pushes to `main`. The repository has no `vercel.json`, Dockerfile, or version-controlled Vercel project metadata. GitHub Actions runs the repository checks independently of Vercel deployment.
 
 Vercel must run the web workspace build:
 
@@ -338,7 +335,9 @@ npm run build --workspace apps/web
 
 The production project needs `NEXT_PUBLIC_CDP_PROJECT_ID` and server-only `GROQ_API_KEY`. It needs `NEXT_PUBLIC_VECTOR_TEST_DEMO_FAUCET_ADDRESS` only when the public faucet should be enabled. The CDP project must allow the production origin.
 
-<!-- VERIFY: Record the Vercel Root Directory, install command, Node.js setting, and production branch from the Vercel dashboard. These settings are external to this repository. -->
+The Vercel install command and platform Node.js selection are dashboard-managed rather than
+version-controlled. They must remain compatible with the root npm workspace lockfile and the
+`node >=24` requirement in `package.json`.
 
 Solidity deployment is separate from web deployment. The existing browser demo pins already-deployed Base Sepolia fixture addresses. All Foundry scripts reject non-Sepolia chain ID `84532`, use an encrypted keystore selected with `--account`, and require `--broadcast` before changing chain state. Follow `docs/BASE_SEPOLIA.md`; do not deploy or reconfigure contracts as part of a normal web release.
 
@@ -353,6 +352,8 @@ Solidity deployment is separate from web deployment. The existing browser demo p
 - Groq interpretation requires a separately managed API key and is subject to provider availability and rate limits. Broader multi-asset interpretation remains future work.
 - The repository contains read-only Base Mainnet integration and readiness logic, but no production executor deployment and no Base Mainnet submission UI.
 - 0x BStocks access and legal/account entitlement are pending. Known access restrictions are reported rather than bypassed.
+- Production tokenized-stock access depends on provider, account, and jurisdiction eligibility. The
+  Base Sepolia demo does not perform or imply an eligibility determination.
 - Chainlink Data Streams credentials and subscription entitlement are pending.
 - Custom CDP paymaster sponsorship, Spend Permissions, relaying, delegated execution, background execution, and automatic execution are not implemented.
 - Beyond the bounded Groq interpretation route, no database, watcher, monitoring service, or production operations layer is implemented.

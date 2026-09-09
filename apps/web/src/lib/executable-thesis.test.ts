@@ -14,7 +14,6 @@ import {
   interpretDemoThesis,
   isDemoAssetAllowedInProduction,
   prepareThesisExecution,
-  readinessCanDisplayReady,
 } from "./executable-thesis.ts";
 
 const NOW = new Date("2026-09-02T12:00:00.000Z");
@@ -112,9 +111,22 @@ describe("Executable Thesis demo flow", () => {
   it("isolates demo assets and labels blocked production dependencies honestly", () => {
     assert.equal(isDemoAssetAllowedInProduction("mUSDC"), false);
     assert.equal(isDemoAssetAllowedInProduction("NOTB20"), false);
-    for (const item of PRODUCTION_READINESS) {
-      assert.equal(readinessCanDisplayReady(item.state), item.state === "READY");
-    }
+    assert.deepEqual(
+      PRODUCTION_READINESS.map((item) => item.state),
+      [
+        "DEMONSTRATED",
+        "DEMONSTRATED",
+        "IMPLEMENTED",
+        "DEMONSTRATED",
+        "ACCESS PENDING",
+        "ACCESS PENDING",
+        "NOT DEPLOYED",
+      ],
+    );
+    assert.equal(
+      PRODUCTION_READINESS.some((item) => item.state === ("READY" as string)),
+      false,
+    );
     assert.match(TESTNET_EXECUTION_DISCLOSURE, /BASE SEPOLIA LIVE DEMO/);
     assert.match(TESTNET_EXECUTION_DISCLOSURE, /NO REAL STOCKS/);
   });

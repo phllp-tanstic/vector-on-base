@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    name: TypeScript and web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build web application
+        run: npm run build --workspace apps/web
+
+      - name: Type check
+        run: npm run typecheck
+
+  solidity:
+    name: Solidity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Solidity dependencies
+        working-directory: contracts
+        run: >-
+          forge install OpenZeppelin/openzeppelin-contracts@v5.6.1
+          foundry-rs/forge-std@v1.16.1 --no-git
+
+      - name: Run Solidity tests
+        working-directory: contracts
+        run: forge test
