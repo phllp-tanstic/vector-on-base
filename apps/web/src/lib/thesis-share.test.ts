@@ -6,9 +6,13 @@ import {
   decodeSharePayload,
   persistedFromWorkingThesis,
   toPublicThesisPayload,
+  type PersistedExecutableThesis,
 } from "./persisted-thesis.ts";
 import {
+  OPEN_SHARED_VIEW_LABEL,
+  attemptThesisShareLink,
   copyThesisShareLink,
+  openSharedViewLinkProps,
   shareButtonLabel,
   type ShareClipboardEnvironment,
 } from "./thesis-share.ts";
@@ -98,7 +102,43 @@ describe("thesis share UX", () => {
       clipboard: { writeText: async () => Promise.reject(new Error("denied")) },
     });
     assert.equal(result.copied, false);
+    assert.match(result.url, /^https:\/\/vector\.example\/share\?thesis=/u);
     assert.equal(fallback.removed(), true);
+  });
+
+  it("preserves the canonical URL when the clipboard environment itself fails", async () => {
+    const thesis = await fixture();
+    const result = await copyThesisShareLink(thesis, "https://vector.example", {
+      clipboard: {
+        writeText: () => {
+          throw new Error("clipboard unavailable");
+        },
+      },
+      document: {
+        body: {
+          appendChild: () => {
+            throw new Error("document unavailable");
+          },
+        },
+        createElement: () => {
+          throw new Error("document unavailable");
+        },
+      },
+    });
+    assert.equal(result.copied, false);
+    assert.match(result.url, /^https:\/\/vector\.example\/share\?thesis=/u);
+  });
+
+  it("opens the exact canonical URL in a safe new tab after copy failure", async () => {
+    const thesis = await fixture();
+    const result = await copyThesisShareLink(thesis, "https://vector.example", {});
+    assert.equal(result.copied, false);
+    assert.equal(OPEN_SHARED_VIEW_LABEL, "Open shared view");
+    assert.deepEqual(openSharedViewLinkProps(result.url), {
+      href: result.url,
+      rel: "noopener noreferrer",
+      target: "_blank",
+    });
   });
 
   it("provides visible default, success, and failure labels for receipt and library buttons", () => {
@@ -108,6 +148,17 @@ describe("thesis share UX", () => {
     assert.equal(shareButtonLabel("receipt", "copied"), "Link copied");
     assert.equal(shareButtonLabel("library", "failed"), "Copy failed");
     assert.equal(shareButtonLabel("receipt", "failed"), "Copy failed");
+    assert.equal(shareButtonLabel("library", "unavailable"), "Share link unavailable");
+    assert.equal(shareButtonLabel("receipt", "unavailable"), "Share link unavailable");
+  });
+
+  it("distinguishes canonical URL generation failure from clipboard failure", async () => {
+    const thesis = {
+      ...(await fixture()),
+      creator: 1n,
+    } as unknown as PersistedExecutableThesis;
+    const result = await attemptThesisShareLink(thesis, "https://vector.example", {});
+    assert.deepEqual(result, { state: "unavailable" });
   });
 
   it("uses identical serialization and excludes execution and authorization fields", async () => {
@@ -118,8 +169,13 @@ describe("thesis share UX", () => {
       smartAccountAuthorization: true,
       executionQuote: { buyAmount: "1" },
       adaptedExecutionAmount: 320,
+      riskAcceptance: true,
       nonce: 7,
       calldata: "0x1234",
+      approvalTarget: "0xapproval",
+      executionTarget: "0xexecution",
+      quote: { buyAmount: "1" },
+      userOperationState: "CONFIRMED",
       targets: ["0xtarget"],
       transactionState: "CONFIRMED",
     };
@@ -139,8 +195,13 @@ describe("thesis share UX", () => {
       "smartAccountAuthorization",
       "executionQuote",
       "adaptedExecutionAmount",
+      "riskAcceptance",
       "nonce",
       "calldata",
+      "approvalTarget",
+      "executionTarget",
+      "quote",
+      "userOperationState",
       "targets",
       "transactionState",
     ]) {

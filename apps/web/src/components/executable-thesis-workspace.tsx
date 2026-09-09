@@ -32,12 +32,13 @@ import {
 } from "../lib/persisted-thesis";
 import {
   SHARE_FEEDBACK_DURATION_MS,
-  copyThesisShareLink,
-  shareButtonLabel,
+  attemptThesisShareLink,
+  type ShareAttemptResult,
   type ShareCopyState,
 } from "../lib/thesis-share";
 import { BaseSepoliaTestSwapCard } from "./base-sepolia-test-swap-card";
 import { CopyableValue } from "./copyable-value";
+import { CurrentThesisActionRow, LibraryThesisActionRow } from "./share-action";
 import { SharedThesisView } from "./shared-thesis-view";
 
 const RECIPIENT_DEMO_PORTFOLIO = Object.freeze({
@@ -129,6 +130,7 @@ export function ExecutableThesisWorkspace({
     readonly target: string;
     readonly state: Exclude<ShareCopyState, "default">;
   }>();
+  const [shareFallbackUrls, setShareFallbackUrls] = useState<Readonly<Record<string, string>>>({});
   const shareFeedbackTimer = useRef<number | undefined>(undefined);
   const [history, setHistory] = useState<readonly ThesisExecutionRecord[]>([]);
   const [isSharedAdapted, setIsSharedAdapted] = useState(false);
@@ -147,6 +149,10 @@ export function ExecutableThesisWorkspace({
         : risk
           ? 2
           : 1;
+  const receiptShareFallbackUrl = shareFallbackUrl("receipt");
+  const currentShareFallbackUrl = savedThesis
+    ? shareFallbackUrl(`current:${savedThesis.id}`)
+    : undefined;
 
   useEffect(() => {
     try {
@@ -308,6 +314,7 @@ export function ExecutableThesisWorkspace({
   function showShareFeedback(target: string, state: Exclude<ShareCopyState, "default">) {
     if (shareFeedbackTimer.current !== undefined) {
       window.clearTimeout(shareFeedbackTimer.current);
+      shareFeedbackTimer.current = undefined;
     }
     setShareFeedback({ target, state });
     shareFeedbackTimer.current = window.setTimeout(() => {
@@ -319,13 +326,23 @@ export function ExecutableThesisWorkspace({
     return shareFeedback?.target === target ? shareFeedback.state : "default";
   }
 
+  function shareFallbackUrl(target: string): string | undefined {
+    return shareFallbackUrls[target];
+  }
+
+  function applyShareAttempt(target: string, result: ShareAttemptResult) {
+    setShareFallbackUrls((current) => {
+      if (result.state === "failed") return { ...current, [target]: result.url };
+      if (!(target in current)) return current;
+      const remaining = { ...current };
+      delete remaining[target];
+      return remaining;
+    });
+    showShareFeedback(target, result.state);
+  }
+
   async function copyShareLink(item: PersistedExecutableThesis, target: string) {
-    try {
-      const result = await copyThesisShareLink(item, window.location.origin);
-      showShareFeedback(target, result.copied ? "copied" : "failed");
-    } catch {
-      showShareFeedback(target, "failed");
-    }
+    applyShareAttempt(target, await attemptThesisShareLink(item, window.location.origin));
   }
 
   async function shareExecutedThesis() {
@@ -333,10 +350,9 @@ export function ExecutableThesisWorkspace({
     try {
       const shareable =
         savedThesis ?? (await persistedFromWorkingThesis(thesis, smartAccountAddress));
-      const result = await copyThesisShareLink(shareable, window.location.origin);
-      showShareFeedback("receipt", result.copied ? "copied" : "failed");
+      applyShareAttempt("receipt", await attemptThesisShareLink(shareable, window.location.origin));
     } catch {
-      showShareFeedback("receipt", "failed");
+      applyShareAttempt("receipt", { state: "unavailable" });
     }
   }
 
@@ -450,6 +466,8 @@ export function ExecutableThesisWorkspace({
                 const lastExecution = [...history]
                   .reverse()
                   .find((record) => record.thesisId === item.id);
+                const shareTarget = `library:${item.id}`;
+                const fallbackUrl = shareFallbackUrl(shareTarget);
                 return (
                   <article key={item.id}>
                     <div>
@@ -464,38 +482,14 @@ export function ExecutableThesisWorkspace({
                       <span>Expires {new Date(item.expiry).toLocaleDateString()}</span>
                       <span>Last execution: {lastExecution?.status ?? "None"}</span>
                     </div>
-                    <div className="library-actions">
-                      <button
-                        className="secondary compact"
-                        type="button"
-                        onClick={() => openSaved(item)}
-                      >
-                        Open / edit
-                      </button>
-                      <button
-                        className="secondary compact"
-                        type="button"
-                        onClick={() => void forkSaved(item)}
-                      >
-                        Duplicate / fork
-                      </button>
-                      <button
-                        className="secondary compact"
-                        type="button"
-                        onClick={() => void copyShareLink(item, `library:${item.id}`)}
-                      >
-                        <span aria-live="polite">
-                          {shareButtonLabel("library", shareState(`library:${item.id}`))}
-                        </span>
-                      </button>
-                      <button
-                        className="danger compact"
-                        type="button"
-                        onClick={() => deleteSaved(item)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <LibraryThesisActionRow
+                      {...(fallbackUrl ? { fallbackUrl } : {})}
+                      onDelete={() => deleteSaved(item)}
+                      onFork={() => void forkSaved(item)}
+                      onOpen={() => openSaved(item)}
+                      onShare={() => void copyShareLink(item, shareTarget)}
+                      state={shareState(shareTarget)}
+                    />
                   </article>
                 );
               })}
@@ -641,25 +635,17 @@ export function ExecutableThesisWorkspace({
                 <strong>Portfolio and policy evaluation</strong>
                 <p>Computed by deterministic constraints using labelled fixture values.</p>
               </div>
-              <div className="inline-actions">
-                <button className="secondary" onClick={() => void saveThesis()} type="button">
-                  Save thesis
-                </button>
-                {savedThesis && (
-                  <button
-                    className="secondary"
-                    onClick={() => void copyShareLink(savedThesis, `current:${savedThesis.id}`)}
-                    type="button"
-                  >
-                    <span aria-live="polite">
-                      {shareButtonLabel("library", shareState(`current:${savedThesis.id}`))}
-                    </span>
-                  </button>
-                )}
-                <button onClick={runRiskCheck} type="button">
-                  Run risk check
-                </button>
-              </div>
+              <CurrentThesisActionRow
+                {...(currentShareFallbackUrl ? { fallbackUrl: currentShareFallbackUrl } : {})}
+                onRunRiskCheck={runRiskCheck}
+                onSave={() => void saveThesis()}
+                {...(savedThesis
+                  ? {
+                      onShare: () => void copyShareLink(savedThesis, `current:${savedThesis.id}`),
+                    }
+                  : {})}
+                state={savedThesis ? shareState(`current:${savedThesis.id}`) : "default"}
+              />
             </div>
             {savedMessage && <p className="saved-message">{savedMessage}</p>}
           </section>
@@ -766,7 +752,8 @@ export function ExecutableThesisWorkspace({
               risk={risk!}
               onShareThesis={() => void shareExecutedThesis()}
               onViewMyTheses={viewMyTheses}
-              shareButtonLabel={shareButtonLabel("receipt", shareState("receipt"))}
+              shareState={shareState("receipt")}
+              {...(receiptShareFallbackUrl ? { shareFallbackUrl: receiptShareFallbackUrl } : {})}
             />
           )}
 

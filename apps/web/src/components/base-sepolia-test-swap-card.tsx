@@ -26,8 +26,10 @@ import {
   type ThesisStatus,
 } from "../lib/executable-thesis";
 import type { ThesisExecutionRecord } from "../lib/persisted-thesis";
+import type { ShareCopyState } from "../lib/thesis-share";
 import { BaseSepoliaDemoFaucet } from "./base-sepolia-demo-faucet";
 import { CopyableValue } from "./copyable-value";
+import { ReceiptShareActionRow } from "./share-action";
 
 const publicClient = createPublicClient({
   chain: baseSepolia,
@@ -51,7 +53,8 @@ export function BaseSepoliaTestSwapCard({
   onConfirmedExecution,
   onShareThesis,
   onViewMyTheses,
-  shareButtonLabel,
+  shareState,
+  shareFallbackUrl,
 }: Readonly<{
   smartAccount: EndUserEvmSmartAccount | undefined;
   thesis: ExecutableThesis;
@@ -60,7 +63,8 @@ export function BaseSepoliaTestSwapCard({
   onConfirmedExecution?: (record: Omit<ThesisExecutionRecord, "thesisId">) => void;
   onShareThesis?: () => void;
   onViewMyTheses?: () => void;
-  shareButtonLabel: string;
+  shareState: ShareCopyState;
+  shareFallbackUrl?: string;
 }>) {
   const smartAccountAddress = asEvmAddress(smartAccount?.address);
   const { sendUserOperation, status: sendStatus, error: sendError } = useSendUserOperation();
@@ -527,14 +531,12 @@ export function BaseSepoliaTestSwapCard({
                 <li>User explicitly authorized both calls</li>
               </ul>
             </div>
-            <div className="receipt-actions" aria-label="Executed thesis actions">
-              <button className="secondary" type="button" onClick={onShareThesis}>
-                <span aria-live="polite">{shareButtonLabel}</span>
-              </button>
-              <button className="secondary" type="button" onClick={onViewMyTheses}>
-                View in My Theses
-              </button>
-            </div>
+            <ReceiptShareActionRow
+              {...(shareFallbackUrl ? { fallbackUrl: shareFallbackUrl } : {})}
+              {...(onShareThesis ? { onShare: onShareThesis } : {})}
+              {...(onViewMyTheses ? { onViewMyTheses } : {})}
+              state={shareState}
+            />
           </div>
         ) : (
           <p className="success">

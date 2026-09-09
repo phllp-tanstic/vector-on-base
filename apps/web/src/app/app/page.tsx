@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { DappPage } from "../../components/dapp-page";
 
 export const metadata: Metadata = {
-  title: "Shared Executable Thesis — Vector",
-  description: "Review a public Vector thesis and adapt it to your own portfolio constraints.",
+  title: "Vector App — Executable Thesis",
+  description: "Structure and authorize portfolio-aware positions on Base Sepolia.",
 };
 
 export default DappPage;

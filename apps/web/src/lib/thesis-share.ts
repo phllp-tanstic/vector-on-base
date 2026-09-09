@@ -1,9 +1,15 @@
 import { createShareUrl, type PersistedExecutableThesis } from "./persisted-thesis.ts";
 
-export type ShareCopyState = "default" | "copied" | "failed";
+export type ShareCopyState = "default" | "copied" | "failed" | "unavailable";
 export type ShareButtonContext = "library" | "receipt";
 
+export type ShareAttemptResult =
+  | Readonly<{ state: "copied" }>
+  | Readonly<{ state: "failed"; url: string }>
+  | Readonly<{ state: "unavailable" }>;
+
 export const SHARE_FEEDBACK_DURATION_MS = 2_400;
+export const OPEN_SHARED_VIEW_LABEL = "Open shared view";
 
 interface ClipboardWriter {
   writeText(value: string): Promise<void>;
@@ -52,7 +58,16 @@ function browserClipboardEnvironment(): ShareClipboardEnvironment {
 export function shareButtonLabel(context: ShareButtonContext, state: ShareCopyState): string {
   if (state === "copied") return "Link copied";
   if (state === "failed") return "Copy failed";
+  if (state === "unavailable") return "Share link unavailable";
   return context === "receipt" ? "Share thesis" : "Copy share link";
+}
+
+export function openSharedViewLinkProps(url: string) {
+  return {
+    href: url,
+    rel: "noopener noreferrer",
+    target: "_blank",
+  } as const;
 }
 
 function copyWithDocumentFallback(value: string, fallbackDocument?: FallbackDocument): boolean {
@@ -97,8 +112,27 @@ export async function copyThesisShareLink(
   environment?: ShareClipboardEnvironment,
 ): Promise<Readonly<{ copied: boolean; url: string }>> {
   const url = createShareUrl(thesis, origin);
+  let copied = false;
+  try {
+    copied = await copyTextWithFallback(url, environment ?? browserClipboardEnvironment());
+  } catch {
+    // The canonical URL already exists, so any later browser failure is still a copy failure.
+  }
   return {
-    copied: await copyTextWithFallback(url, environment ?? browserClipboardEnvironment()),
+    copied,
     url,
   };
+}
+
+export async function attemptThesisShareLink(
+  thesis: PersistedExecutableThesis,
+  origin: string,
+  environment?: ShareClipboardEnvironment,
+): Promise<ShareAttemptResult> {
+  try {
+    const result = await copyThesisShareLink(thesis, origin, environment);
+    return result.copied ? { state: "copied" } : { state: "failed", url: result.url };
+  } catch {
+    return { state: "unavailable" };
+  }
 }
