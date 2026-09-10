@@ -2,6 +2,10 @@
 
 Vector on Base turns market theses into constrained token execution plans that users can authorize with Coinbase Smart Accounts on Base.
 
+[![Watch the Vector on Base demo](https://img.youtube.com/vi/aNSPwnla2Ds/maxresdefault.jpg)](https://youtu.be/aNSPwnla2Ds)
+
+[Watch the demo on YouTube](https://youtu.be/aNSPwnla2Ds)
+
 ## Table of contents
 
 - [Overview](#overview)

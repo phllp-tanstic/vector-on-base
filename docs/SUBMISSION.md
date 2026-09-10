@@ -112,9 +112,10 @@ settlement invariants; it does not execute the displayed $320/$180 adapted dolla
 
 [https://github.com/phllp-tanstic/vector-on-base](https://github.com/phllp-tanstic/vector-on-base)
 
-## N. Live demo link
+## N. Live app and demo video
 
-`TODO: ADD LIVE DEMO URL`
+- App: [https://vector-on-base.vercel.app](https://vector-on-base.vercel.app)
+- Video: [https://youtu.be/aNSPwnla2Ds](https://youtu.be/aNSPwnla2Ds)
 
 ## O. Base Sepolia contract
 
